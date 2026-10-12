@@ -1,0 +1,382 @@
+﻿@page "/principal"
+@using PortalEmpleadoGeotime.Client.Data.DataBaseLocal
+
+@inject LoginState loginState
+@inject IBrowserService browserService
+@inject PeriodicExecutor PeriodicExecutor
+
+
+<PageTitle>Index</PageTitle>
+
+@if (InProcess)
+{
+    <SpinnerControl></SpinnerControl>
+}
+
+
+
+<div class="dashboard-container">
+    <div class="dashboard-header">
+        <RadzenText TextStyle="TextStyle.H3" TagName="TagName.H1" style="color: var(--primary-color)">@loginState.Empleado.Nombre! (@loginState.Empleado.IdNumero)</RadzenText>
+        <RadzenText TextStyle="TextStyle.Subtitle1">Bienvenido(a) al Sistema para Registro de Labores</RadzenText>
+    </div>
+
+    <div class="menu-grid">
+        @if (loginState.Empleado.Estado != 'X')
+        {
+            <RadzenCard class="menu-item-card rz-shadow-6" @onclick='() => NavigationManager.NavigateTo("/marcas")'>
+                <RadzenIcon Icon="fingerprint" Style="font-size: 3rem; margin-bottom: 1rem; color: var(--primary-color)" />
+                <RadzenText TextStyle="TextStyle.Button" class="menu-label">Registro de Marcas</RadzenText>
+            </RadzenCard>
+        }
+        
+        <RadzenCard class="menu-item-card rz-shadow-6" @onclick='() => NavigationManager.NavigateTo("/empleadomarcalist")'>
+            <RadzenIcon Icon="groups" Style="font-size: 3rem; margin-bottom: 1rem; color: var(--primary-color)" />
+            <RadzenText TextStyle="TextStyle.Button" class="menu-label">Registro de Marcas Grupal</RadzenText>
+        </RadzenCard>
+        <RadzenCard class="menu-item-card rz-shadow-6" @onclick='() => NavigationManager.NavigateTo("/empleadoextlist")'>
+            <RadzenIcon Icon="face" Style="font-size: 3rem; margin-bottom: 1rem; color: var(--primary-color)" />
+            <RadzenText TextStyle="TextStyle.Button" class="menu-label">Registro de Rostros de Colaboradores</RadzenText>
+        </RadzenCard>
+        <RadzenCard class="menu-item-card rz-shadow-6" @onclick='() => NavigationManager.NavigateTo("/geoagrlaborauxiliarlist")'>
+            <RadzenIcon Icon="agriculture" Style="font-size: 3rem; margin-bottom: 1rem; color: var(--primary-color)" />
+            <RadzenText TextStyle="TextStyle.Button" class="menu-label">Registro de Labores Auxiliares</RadzenText>
+        </RadzenCard>            
+        <RadzenCard class="menu-item rz-shadow-6" @onclick='() => NavigationManager.NavigateTo("/sincronizacionmanual")'>
+            <RadzenIcon Icon="north_west" Style="font-size: 3rem; margin-bottom: 1rem; color: var(--primary-color)" />
+            <RadzenText TextStyle="TextStyle.Button" class="menu-label">Sincronizar</RadzenText>
+        </RadzenCard>
+            
+    </div>
+</div>
+
+
+
+@code{
+
+    bool menuVisualizado = false;
+    BrowserDimension windowdimensions = new();
+    bool InProcess = true;
+
+    protected override async Task OnInitializedAsync()  
+    {
+
+        /* Validat si el api esta disponible, hacer el proceso requerido */
+        if (!await geoConnect.ApiDisponible())
+        {
+            MarcasDBLocal laborDBLocal = new();
+        }
+        else
+        {
+            // ── Sincronización TicoFrut ──────────────────────────────────────
+            if (await ticoFrutConnect.ApiDisponible())
+            {
+                await SincronizarBases();
+            }     
+            PeriodicExecutor.StartExecuting();
+        }
+        
+        InProcess = false;
+        StateHasChanged();
+    }
+
+    
+
+    private async Task SincronizarBases()
+    {
+        try
+        {
+            MarcasDBLocal marcaDBLocal = new();
+
+            var parametro = await marcaDBLocal.GetParametroAsync(1);
+
+            if (parametro is not null)
+            {
+                //si la sincronizacion de base de datos no se ha realizado en el dia en curso
+                //entonces proceder a sincronizar bases.
+                if (parametro.UltimaSincronización == DateTime.Now.ToString("yyyyMMdd"))
+                {
+                    return;
+                }
+            }
+
+            var empleadosTask = geoConnect.GetEmpleado();
+            var marcasTask = geoConnect.GetMarca(loginState.Empleado.IdNumero!, DateTime.Now.ToString("yyyyMMdd"));
+            var phPlanillasTask = geoConnect.GetPhPlanilla();
+            var phPeriodosTask = geoConnect.GetPeriodo();
+            var marcasPendientesTask = marcaDBLocal.GetMarcaPendiente();
+            var ccostosTask = geoConnect.GetCentroCosto();
+            var proyectosTask = geoConnect.GetProyecto();
+            var estadosTask = geoConnect.GetEstado();
+            var faseproyectosTask = geoConnect.GetFaseProyecto();
+            var phUsuarioTask = geoConnect.GetPhUsuarioById(loginState.PhLogin!.idusuario!.ToString());
+            var phLoginTask = geoConnect.GetPhLogin();
+            var distribucionPendienteTask = marcaDBLocal.GetMarcaDistribucionPendienteAsync();
+            var templatesFACESTask = geoConnect.GetTemplateFACE();            
+            
+            var solicitudAuxLaborTask = geoConnect.GetSolicitudAuxLaborByResponsable(loginState.CompaniaSeleccionada, loginState.Empleado.IdNumero!, DateTime.Now.AddDays(-35).ToString("yyyyMMdd"), DateTime.Now.AddDays(1).ToString("yyyyMMdd"));
+            var laborAuxiliarTask = marcaDBLocal.GetGeoAgrLaborAuxiliarAsync(loginState.CompaniaSeleccionada, loginState.Empleado.IdNumero!, DateTime.Now.AddDays(-35), DateTime.Now.AddDays(1));
+            var itemsLaborAuxiliarTask = marcaDBLocal.GetGeoAgrLaborAuxiliarDetAsync(loginState.CompaniaSeleccionada, loginState.Empleado.IdNumero!, DateTime.Now.AddDays(-35), DateTime.Now.AddDays(1));
+            
+            
+            var fincasTask = ticoFrutConnect.GetGeoAgrFinca();
+            var lotesTask = ticoFrutConnect.GetGeoAgrLote();
+            var otsTask = ticoFrutConnect.GetGeoAgrOt();
+            var otLaboresTask = ticoFrutConnect.GetGeoAgrOtLabor();
+            var recursosTask = ticoFrutConnect.GetGeoAgrRecursoConcepto();
+
+            await Task.WhenAll(empleadosTask, marcasTask, phPlanillasTask, phPeriodosTask,
+                               marcasPendientesTask, ccostosTask, proyectosTask, faseproyectosTask,
+                               phUsuarioTask, phLoginTask, distribucionPendienteTask, templatesFACESTask,
+                               fincasTask, lotesTask, otsTask, laborAuxiliarTask, itemsLaborAuxiliarTask, solicitudAuxLaborTask,
+                               otLaboresTask, recursosTask, laborAuxiliarTask, estadosTask);
+
+            var empleados = await empleadosTask;
+            var marcas = await marcasTask;
+            var phPlanillas = await phPlanillasTask;
+            var phPeriodos = await phPeriodosTask;
+            var marcasPendientes = await marcasPendientesTask;
+            var ccostos = await ccostosTask;
+            var proyectos = await proyectosTask;
+            var phUsuario = await phUsuarioTask;
+            var phLogin = await phLoginTask;
+            var faseproyectos = await faseproyectosTask;
+            var marcasDistribucionPendientes = await distribucionPendienteTask;
+            var templatesFACES = await templatesFACESTask;
+            var estados = await estadosTask;
+
+            var fincas = await fincasTask;
+            var lotes = await lotesTask;
+            var ots = await otsTask;
+            var otLabores = await otLaboresTask;
+            var recursos = await recursosTask;
+            var laborAuxiliar = await laborAuxiliarTask;
+            var solicitudAuxLabor = await solicitudAuxLaborTask;
+            var itemsLaborAuxiliar = await itemsLaborAuxiliarTask;
+            List<GeoAgrLaborAuxiliar>? laboresAuxiliares = await laborAuxiliarTask;
+
+            List<cMarcaIn> listMarcas = new();
+            if (marcas is not null)
+            {
+                listMarcas = (from m in marcas
+                              select new cMarcaIn
+                              {
+                                  idplanilla = m.idplanilla,
+                                  idnumero = m.idnumero,
+                                  fecha = m.fecha,
+                                  hora = m.hora,
+                                  tipo = m.tipo,
+                                  idterminal = m.idterminal,
+                                  estado = 'S',
+                                  fecha_reg = m.fecha_reg,
+                                  long_reg = m.long_reg,
+                                  lat_reg = m.lat_reg,
+                                  imagen_reg = m.imagen_reg,
+                                  gps_cell = m.gps_cell,
+                                  dir_ip = m.dir_ip,
+                                  host = m.idterminal,
+                              })
+                          .ToList();
+            }
+            
+
+            await marcaDBLocal.SaveEmpleadoAsync(empleados);
+            await marcaDBLocal.SavePhPlanillaAsync(phPlanillas);
+            await marcaDBLocal.SavePhPeriodoAsync(phPeriodos);
+            await marcaDBLocal.SaveCentroCostoAsync(ccostos);
+            await marcaDBLocal.SaveProyectoAsync(proyectos);
+            await marcaDBLocal.SaveFaseProyectoAsync(faseproyectos);
+            await marcaDBLocal.SaveEstadoAsync(estados);
+
+            if (listMarcas.Count() > 0)
+                await marcaDBLocal.SaveMarcaInAsync(listMarcas);
+            await marcaDBLocal.SaveTemplateFACEAsync(templatesFACES);
+
+            await marcaDBLocal.SaveGeoAgrFincaAsync(fincas);
+            await marcaDBLocal.SaveGeoAgrLoteAsync(lotes);
+            await marcaDBLocal.SaveGeoAgrOtAsync(ots);
+            await marcaDBLocal.SaveGeoAgrOtLaborAsync(otLabores);
+            await marcaDBLocal.SaveGeoAgrRecursoConceptoAsync(recursos);
+            await marcaDBLocal.SaveGeoAgrLaborAuxiliarAsync(laborAuxiliar);
+
+            if (solicitudAuxLabor is not null)
+			{
+				foreach (var solicitud in solicitudAuxLabor)
+				{
+					List<GeoAgrLaborAuxiliarDet> itemsAuxDetActualizar = new();
+					if (laboresAuxiliares.Any(l => l.IdRegistro == solicitud.IDREGISTROAPP))
+					{
+						var itemsSolicitud = solicitud.cSolicitudAuxLaborDet!;
+						foreach (var itemDet in itemsSolicitud)
+						{
+							var itemsAuxDet = itemsLaborAuxiliar
+								.FirstOrDefault(i => i.IdRegistro == solicitud.IDREGISTROAPP
+											&& i.Item == itemDet.ITEM
+											&& i.IdEmpleadoAsignado == itemDet.IDNUMERO
+											&& i.Fecha == itemDet.FECHA);
+
+							if (itemsAuxDet is not null)
+							{
+								itemsAuxDet.EstadoId = itemDet.ESTADOID;
+								itemsAuxDet.CantidadRendimiento = itemDet.CANTIDAD_RENDIMIENTO;
+								itemsAuxDet.HorasAprobadas = itemDet.HORAS_APROBADAS;
+
+								itemsAuxDetActualizar.Add(itemsAuxDet);
+							}
+						}
+					
+						if (itemsAuxDetActualizar.Count > 0)
+							await marcaDBLocal.SaveGeoAgrLaborAuxiliarDetAsync(itemsAuxDetActualizar);
+					}
+				}
+			}
+			
+            if (phUsuario is not null)
+            {
+                await marcaDBLocal.SavePhUsuarioAsync(phUsuario, loginState.Empleado.IdNumero!);
+            }
+
+            if (phLogin is not null)
+            {
+                await marcaDBLocal.SavePhLoginAsync(phLogin);
+            }
+
+            // ── Enviar labores pendientes (EstadoId = 0) que no pudieron enviarse por falta de conexión ──
+            var laboresPendientes = laboresAuxiliares?.Where(l => l.EstadoId == 0).ToList();
+            if (laboresPendientes is not null && laboresPendientes.Count > 0)
+            {
+                foreach (var labor in laboresPendientes)
+                {
+                    var dets = itemsLaborAuxiliar?.Where(d => d.IdRegistro == labor.IdRegistro).ToList();
+                    if (dets is null || dets.Count == 0) continue;
+
+                    var listaDetalle = dets.Select(d => new cSolicitudAuxLaborDet
+                    {
+                        SOLICITUDID = 0,
+                        IDNUMERO = d.IdEmpleadoAsignado!,
+                        ITEM = d.Item,
+                        BLOQUE = d.Bloque!,
+                        FINCA = d.Finca!,
+                        LOTE = d.Lote!,
+                        OT = d.Ot!,
+                        LABOR = d.Labor!,
+                        RECURSO = d.Recurso!,
+                        CANTIDAD_RENDIMIENTO = (decimal)d.CantidadRendimiento!,
+                        UNIDAD = d.Unidad!,
+                        COMPANIA = labor.Compania!,
+                        FECHA = labor.Fecha,
+                        HORAS_APROBADAS = 0M,
+                        ESTADOID = 1,
+                    }).ToList();
+
+                    var laborGT = new cSolicitudAuxLabor
+                    {
+                        ID = 0,
+                        COMPANIA = labor.Compania!,
+                        IDRESPONSABLE = labor.IdEmpleado!,
+                        FECHA = labor.Fecha,
+                        COMENTARIOS = labor.Comentarios,
+                        ESTADOID = 1,
+                        cSolicitudAuxLaborDet = listaDetalle,
+                        FECHAREGISTRO = DateTime.Now,
+                        FECHAMODIFICA = DateTime.Now,
+                        IDREGISTROAPP = labor.IdRegistro,
+                        IDUSUARIOMODIFICA = loginState.Empleado.IdNumero!,
+                        IDUSUARIOREGISTRA = loginState.Empleado.IdNumero!,
+                    };
+
+                    var responseLabor = await geoConnect.Post("SolicitudAuxLabor", new List<cSolicitudAuxLabor>() { laborGT });
+                    if (responseLabor.Id == "0")
+                        await marcaDBLocal.SaveGeoAgrLaborAuxiliarEstadoAsync(labor.IdRegistro, labor.Compania!);
+                }
+            }
+
+            if (marcasPendientes.Count() > 0)
+            {
+                var response = await geoConnect.Post("MarcaIn", marcasPendientes);
+
+                if (response.Id != "0")
+                {
+                    await swal.FireAsync("Atención", $"Error al sincronizar marcas pendientes. Detalle de error:{response.Descripcion}", SweetAlertIcon.Info);
+                }
+                else
+                {
+                    foreach (var marca in marcasPendientes)
+                    {
+                        marca.estado = 'S';
+                        var resp = await marcaDBLocal.SaveMarcaInAsync(marca);
+
+                    }
+                }
+            }
+
+            if (marcasDistribucionPendientes.Count() > 0)
+            {
+                var marcasDistribucionEnviar = (from m in marcasDistribucionPendientes
+                                                select new cMarcaDistribucionConcepto
+                                                {
+
+                                                    IDREGISTRO = 0,
+                                                    COMENTARIO = m.COMENTARIO,
+                                                    ESTADO = 'A',
+                                                    IDCCOSTO = m.IDCCOSTO,
+                                                    PROYECTO = m.PROYECTO,
+                                                    FASE = m.FASE,
+                                                    CANTIDAD = m.CANTIDAD,
+                                                    FECHA = m.FECHA,
+                                                    INICIO = m.INICIO,
+                                                    FIN = m.FIN,
+                                                    IDNUMERO = m.IDNUMERO,
+                                                    FECHA_DIST = DateTime.Now,
+                                                    IDPLANILLA = m.IDPLANILLA!,
+                                                    IDDIST = 0,
+                                                    LAT_REG = "",
+                                                    LON_REG = "",
+                                                }).ToList();
+
+                var response = await geoConnect.Post("MarcaDistribucionConcepto", marcasDistribucionPendientes);
+                if (response.Id != "0")
+                {
+                    await swal.FireAsync("Atención", $"Error al sincronizar marcas de distribución pendientes. Detalle de error:{response.Descripcion}", SweetAlertIcon.Info);
+                }
+                else
+                {
+                    foreach (var marca in marcasDistribucionPendientes)
+                    {
+                        marca.ESTADO = 'S';
+                        var resp = await marcaDBLocal.SaveMarcaDistribucionConceptoAsync(marca);
+                    }
+                }
+            }
+
+
+            if (parametro is null)
+                parametro = new ParametroSinc
+                {
+                    Id = 1,
+                    UltimaSincronización = "",
+                };
+
+            parametro.UltimaSincronización = DateTime.Now.ToString("yyyyMMdd");
+
+            var respParam = await marcaDBLocal.SaveParametroAsync(parametro);
+
+            if (respParam == 1)
+            {
+                await swal.FireAsync("Atención", $"El proceso de sincronización ha finalizado.", SweetAlertIcon.Info);
+            }
+
+        }
+        catch (Exception e)
+        {
+            await swal.FireAsync("Error", $"Error al cargar la pagina.  Detalle de error: {e.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    private void OnClick(string text)
+    {
+		NavigationManager.NavigateTo($"{text}");
+    }
+
+    
+}

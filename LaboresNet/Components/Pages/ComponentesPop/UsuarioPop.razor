@@ -1,0 +1,87 @@
+﻿@*Ventana emergente para ver los empleados*@
+@page "/usuariopop"
+
+<div class="card card-header">
+    <div class="row">
+        <div class="col-1 text-start">
+        </div>
+        <div class="col text-start">
+            <div class="col text-center">
+                <h3>@Titulo</h3>
+            </div>
+        </div>
+        <div class="col-1 text-end">
+        </div>
+    </div>
+</div>
+
+@if (InProcess)
+{
+    <SpinnerControl></SpinnerControl>
+}
+
+<RadzenDataGrid TItem="EmpleadoExt" Data="@empleados"
+                AllowFiltering="true" AllowPaging="true" PageSize="10"
+                AllowSorting="true" FilterMode="FilterMode.SimpleWithMenu"
+                FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive"
+                RowClick="@OnSelect"
+                Style="width:100%;">
+    <Columns>
+        <RadzenDataGridColumn TItem="EmpleadoExt" Property="IdNumero" Title="Id Empleado" />
+        <RadzenDataGridColumn TItem="EmpleadoExt" Property="Nombre" Title="Nombre" />
+        <RadzenDataGridColumn TItem="EmpleadoExt" Property="Email" Title="Correo Electrónico" />
+        <RadzenDataGridColumn TItem="EmpleadoExt" Property="DescDepartamento" Title="Departamento" />
+        <RadzenDataGridColumn TItem="EmpleadoExt" Property="DescCentroCosto" Title="Centro de Costo" />
+    </Columns>
+</RadzenDataGrid>
+
+@code {
+    [Parameter] public EventCallback<string> OnEmpleadoSelected { get; set; }
+
+    public IEnumerable<EmpleadoExt>? empleados { get; set; }
+    public string Titulo = "Lista de Empleados";
+    public bool InProcess = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        empleados = await GetEmpleados();
+    }
+
+    private async Task<IEnumerable<EmpleadoExt>> GetEmpleados()
+    {
+        List<EmpleadoExt> lista = new();
+        try
+        {
+            var emps = await geoConnect.GetEmpleado();
+            if (emps != null && emps.Any())
+            {
+                lista = emps.Select(e => new EmpleadoExt
+                {
+                    IdNumero         = e.IdNumero,
+                    Nombre           = e.Nombre,
+                    Email            = e.Email,
+                    IdDepartamento   = e.IdDepartamento,
+                    IdCCosto         = e.IdCCosto,
+                    DescDepartamento = e.Departamento == null ? "" : e.Departamento.DESCRIPCION,
+                    DescCentroCosto  = e.CentroCosto  == null ? "" : e.CentroCosto.Descripcion,
+                }).ToList();
+            }
+            else
+            {
+                await swal.FireAsync("Información", "No se encontraron empleados.", SweetAlertIcon.Info);
+            }
+        }
+        catch (Exception e)
+        {
+            await swal.FireAsync("Error", $"Error al cargar los empleados. Detalle de error: {e.Message}", SweetAlertIcon.Info);
+        }
+        InProcess = false;
+        StateHasChanged();
+        return lista;
+    }
+
+    void OnSelect(DataGridRowMouseEventArgs<EmpleadoExt> args)
+    {
+        OnEmpleadoSelected.InvokeAsync(args.Data.IdNumero);
+    }
+}

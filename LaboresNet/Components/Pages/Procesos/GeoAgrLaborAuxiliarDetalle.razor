@@ -1,0 +1,878 @@
+@page "/geoagrlaborauxiliardetalle"
+@inherits DialogSettingLayout
+@using PortalEmpleadoGeotime.Client.Data.DataBaseLocal
+
+<div class="card">
+    <PageReturn Titulo="@Titulo" UrlRetorno="@UrlRetorno" />
+    <div class="card-body px-2 py-2">
+        @if (InProcess)
+        {
+            <SpinnerControl></SpinnerControl>
+        }
+
+        <div class="ibm-plex-serif-bold">
+
+            @* ══ Encabezado ══ *@
+            <RadzenPanel AllowCollapse="true" class="panel-brand" Style="margin-bottom:0.5rem;">
+                <HeaderTemplate>
+                    <RadzenIcon Icon="event" class="me-1" /> Datos del Avance
+                </HeaderTemplate>
+                <ChildContent>
+                    <div style="display:flex;flex-direction:column;gap:8px;">
+                        <label class="lbl-xs" style="display:flex;flex-direction:column;gap:3px;">
+                            Fecha
+                            <RadzenDatePicker TValue="DateOnly"
+                                             @bind-Value="encabezado.FechaDO"
+                                             Min="@fechaMin.ToDateTime(TimeOnly.MinValue)"
+                                             Max="@fechaHoy.ToDateTime(TimeOnly.MaxValue)"
+                                             DateFormat="dd/MM/yyyy"
+                                             Style="width:100%;font-size:small;" />
+                        </label>
+                        <label class="lbl-xs" style="display:flex;flex-direction:column;gap:3px;">
+                            Comentarios
+                            <InputText class="form-control br8"
+                                       maxlength="500"
+                                       placeholder="Comentarios opcionales"
+                                       @bind-Value="encabezado.Comentarios" />
+                        </label>
+                    </div>
+                </ChildContent>
+            </RadzenPanel>
+
+            @* ══ Colaboradores ══ *@
+            <RadzenPanel AllowCollapse="true" class="panel-brand" Style="margin-bottom:0.5rem;">
+                <HeaderTemplate>
+                    <RadzenIcon Icon="group" class="me-1" /> Colaboradores asignados
+                    @if (empleadosSeleccionados.Count > 0)
+                    {
+                        <span style="margin-left:6px;display:inline-flex;align-items:center;gap:3px;
+                                     padding:1px 8px;border-radius:12px;
+                                     background:#EBF5FC;font-size:0.68rem;font-weight:600;color:#1a76cb;">
+                            @empleadosSeleccionados.Count seleccionados
+                        </span>
+                    }
+                </HeaderTemplate>
+                <ChildContent>
+                    <RadzenDataGrid @ref="gridEmpleados"
+                                    Data="@EmpleadosOrdenados"
+                                    TItem="EmpleadoExt"
+                                    AllowFiltering="true"
+                                    AllowPaging="true"
+                                    PageSize="10"
+                                    AllowSorting="true"
+                                    FilterMode="FilterMode.SimpleWithMenu"
+                                    Style="width:100%;"
+                                    PageSizeOptions="@Utiles.PageSizeOptions()"
+                                    AllowColumnResize="true"
+                                    AllowMultiColumnSorting="true"
+                                    ShowMultiColumnSortingIndex="true"
+                                    FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive"
+                                    SelectionMode="DataGridSelectionMode.Single"
+                                    LogicalFilterOperator="LogicalFilterOperator.Or"
+                                    FilterPopupRenderMode="PopupRenderMode.OnDemand"
+                                    AllowColumnPicking="false"
+                                    AllowColumnReorder="true"
+                                    PagerHorizontalAlign="HorizontalAlign.Center"
+                                    ShowPagingSummary="true"
+                                    Render="@OnRender">
+                        <Columns>
+                            <RadzenDataGridColumn TItem="EmpleadoExt" Title="✓" Width="50px" Sortable="false" Filterable="false" TextAlign="TextAlign.Center">
+                                <HeaderTemplate>
+                                    <RadzenCheckBox Value="@TodosSeleccionados" TValue="bool"
+                                                    Change="@OnSeleccionarTodos"
+                                                    title="Seleccionar / deseleccionar todos" />
+                                </HeaderTemplate>
+                                <Template Context="empleado">
+                                    <RadzenCheckBox Value="@(IsSelected(empleado))" TValue="bool"
+                                                    Change="@(value => OnSelectionChanged(value, empleado))" />
+                                </Template>
+                            </RadzenDataGridColumn>
+                            <RadzenDataGridColumn TItem="EmpleadoExt" Property="Nombre" Title="Empleado" Width="120px">
+                                <Template Context="empleado">
+                                    <div style="display:flex;gap:8px;align-items:flex-start;padding:2px 0;">
+                                        <div class="emp-avatar" style="width:36px;height:36px;font-size:0.85rem;flex-shrink:0;">
+                                            @(string.IsNullOrEmpty(empleado.Nombre) ? "?" : empleado.Nombre.Substring(0,1).ToUpper())
+                                        </div>
+                                        <div style="flex:1;min-width:0;">
+                                            <div style="font-weight:600;font-size:0.85rem;color:#212121;line-height:1.3;">@empleado.Nombre</div>
+                                            @if (!string.IsNullOrEmpty(empleado.DescGrupo))
+                                            {
+                                                <div class="emp-meta-row">
+                                                    <RadzenIcon Icon="group" Style="font-size:0.78rem;color:#bbb;flex-shrink:0;" />
+                                                    @empleado.DescGrupo
+                                                </div>
+                                            }
+                                            @if (!string.IsNullOrEmpty(empleado.DescDepartamento))
+                                            {
+                                                <div class="emp-meta-row">
+                                                    <RadzenIcon Icon="apartment" Style="font-size:0.78rem;color:#bbb;flex-shrink:0;" />
+                                                    @empleado.DescDepartamento
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+                                </Template>
+                            </RadzenDataGridColumn>
+                        </Columns>
+                    </RadzenDataGrid>
+                </ChildContent>
+            </RadzenPanel>
+
+            @* ══ Detalle ══ *@
+            <RadzenPanel AllowCollapse="true" class="panel-brand" Style="margin-bottom:0.5rem;">
+                <HeaderTemplate>
+                    <RadzenIcon Icon="agriculture" class="me-1" /> Líneas de Detalle
+                    @if (detalles.Count > 0)
+                    {
+                        <span style="margin-left:6px;display:inline-flex;align-items:center;gap:3px;
+                                     padding:1px 8px;border-radius:12px;
+                                     background:#EBF5FC;font-size:0.68rem;font-weight:600;color:#1a76cb;">
+                            @detalles.Count @(detalles.Count == 1 ? "línea" : "líneas")
+                        </span>
+                    }
+                </HeaderTemplate>
+                <ChildContent>
+                    <RadzenButton Icon="add"
+                                  Text="Agregar Línea"
+                                  ButtonStyle="ButtonStyle.Secondary"
+                                  Size="ButtonSize.Medium"
+                                  Style="width:100%;touch-action:manipulation;margin-bottom:10px;"
+                                  Click="@AgregarDetalle" />
+
+                    @if (detalles.Count > 0)
+                    {
+                        @foreach (var det in detalles)
+                        {
+                            <div style="background:#fff;border:1px solid #deeef6;border-radius:10px;
+                                        border-top:3px solid #1a76cb;padding:12px;margin-bottom:8px;">
+                                @* Header del ítem *@
+                                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                                    <span style="display:inline-flex;align-items:center;gap:4px;
+                                                 padding:2px 10px;border-radius:12px;
+                                                 background:#EBF5FC;font-size:0.72rem;font-weight:700;color:#1a76cb;">
+                                        <RadzenIcon Icon="agriculture" Style="font-size:0.78rem;" />
+                                        Ítem @det.Item
+                                    </span>
+                                    <RadzenButton Icon="delete" ButtonStyle="ButtonStyle.Danger"
+                                                  Variant="Variant.Outlined" Size="ButtonSize.Small"
+                                                  Click="@(() => EliminarDetalle(det))" />
+                                </div>
+
+                                <div style="display:flex;flex-direction:column;gap:8px;">
+                                    @* Finca *@
+                                    <label class="lbl-xs" style="display:flex;flex-direction:column;gap:3px;">
+                                        Bloque/Finca
+                                        <div style="display:flex;gap:4px;">
+                                            <RadzenButton Icon="zoom_in" ButtonStyle="ButtonStyle.Info"
+                                                          Size="ButtonSize.Small" Style="flex-shrink:0;"
+                                                          Click="@(() => OnShowModalFinca(det))" />
+                                            <InputText class="form-control br8" placeholder="Bloque"
+                                                       readonly="true" @bind-Value="det.Bloque"
+                                                       style="flex:1;min-width:0;" />
+                                            <InputText class="form-control br8" placeholder="Finca"
+                                                       readonly="true" @bind-Value="det.Finca"
+                                                       style="flex:2;min-width:0;" />
+                                        </div>
+                                    </label>
+
+                                    @* Lote *@
+                                    <label class="lbl-xs" style="display:flex;flex-direction:column;gap:3px;">
+                                        Lote
+                                        <div style="display:flex;gap:4px;">
+                                            <RadzenButton Icon="zoom_in" ButtonStyle="ButtonStyle.Info"
+                                                          Size="ButtonSize.Small" Style="flex-shrink:0;"
+                                                          Click="@(() => OnShowModalLote(det))" />
+                                            <InputText class="form-control br8" placeholder="Lote"
+                                                       readonly="true" @bind-Value="det.Lote"
+                                                       style="flex:1;min-width:0;" />
+                                        </div>
+                                    </label>
+                                    @* OT *@
+                                    <label class="lbl-xs" style="display:flex;flex-direction:column;gap:3px;">
+                                        OT 
+                                        <div style="display:flex;gap:4px;">
+                                            <RadzenButton Icon="zoom_in" ButtonStyle="ButtonStyle.Info"
+                                                          Size="ButtonSize.Small" Style="flex-shrink:0;"
+                                                          Click="@(() => OnShowModalOt(det))" />
+                                            <InputText class="form-control br8" placeholder="OT"
+                                                       readonly="true" @bind-Value="det.Ot"
+                                                       style="flex:1;min-width:0;" />
+                                            <InputText class="form-control br8" placeholder="Nombre OT"
+                                                       readonly="true" @bind-Value="det.NombreOt" 
+                                                       style="flex:2;min-width:0;" disabled />
+                                        </div>
+                                    </label>
+
+                                    @* Labor *@
+                                    <label class="lbl-xs" style="display:flex;flex-direction:column;gap:3px;">
+                                        Labor
+                                        <div style="display:flex;gap:4px;">
+                                            <RadzenButton Icon="zoom_in" ButtonStyle="ButtonStyle.Info"
+                                                          Size="ButtonSize.Small" Style="flex-shrink:0;"
+                                                          Click="@(() => OnShowModalOtLabor(det))" />                                            
+                                            <InputText class="form-control br8" placeholder="Labor"
+                                                       readonly="true" @bind-Value="det.Labor"
+                                                       style="flex:2;min-width:0;" />
+                                            <InputText class="form-control br8" placeholder="Nombre Labor"
+                                                       readonly="true" @bind-Value="det.NombreLabor"
+                                                       style="flex:2;min-width:0;" disabled />
+                                        </div>
+                                    </label>
+
+                                    @* Recurso *@
+                                    <label class="lbl-xs" style="display:flex;flex-direction:column;gap:3px;">
+                                        Recurso
+                                        <div style="display:flex;gap:4px;">
+                                            <RadzenButton Icon="zoom_in" ButtonStyle="ButtonStyle.Info"
+                                                          Size="ButtonSize.Small" Style="flex-shrink:0;"
+                                                          Click="@(() => OnShowModalRecurso(det))" />
+                                            <InputText class="form-control br8" placeholder="Recurso"
+                                                       readonly="true" @bind-Value="det.Recurso"
+                                                       style="flex:2;min-width:0;" />
+                                            <InputText class="form-control br8" placeholder="Nombre de Recurso"
+                                                       readonly="true" @bind-Value="det.NombreRecurso"
+                                                       style="flex:2;min-width:0;" disabled />
+                                        </div>
+                                    </label>
+
+                                    @* Cantidad Rendimiento *@
+                                    <label class="lbl-xs" style="display:flex;flex-direction:column;gap:3px;">
+                                        Cantidad Rendimiento
+                                         <div style="display:flex;gap:4px;">
+                                            <RadzenNumeric TValue="decimal?"
+                                                           @bind-Value="det.CantidadRendimiento"
+                                                           Placeholder="0.00"
+                                                           Format="n2"
+                                                           Style="font-size:small;flex:2;min-width:0" />
+                                            <InputText class="form-control br8" placeholder="Unidad"
+                                                       readonly="true" @bind-Value="det.Unidad"
+                                                       style="flex:2;min-width:0;" disabled />
+                                        </div>
+
+                                        
+                                    </label>
+                                </div>
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <div style="text-align:center;padding:24px 0;color:#bbb;">
+                            <RadzenIcon Icon="agriculture" Style="font-size:2.5rem;display:block;margin:0 auto 8px;color:#ccc;" />
+                            <div style="font-size:0.85rem;color:#999;">No hay líneas de detalle.</div>
+                            <div style="font-size:0.75rem;color:#bbb;margin-top:2px;">Presione "Agregar Línea" para comenzar.</div>
+                        </div>
+                    }
+                </ChildContent>
+            </RadzenPanel>
+
+        </div>
+
+        <EditForm Model="@encabezado" OnValidSubmit="GuardarDatos">
+            <RadzenButton ButtonType="ButtonType.Submit"
+                          Icon="save"
+                          Text="Guardar"
+                          ButtonStyle="ButtonStyle.Primary"
+                          Size="ButtonSize.Large"
+                          Style="width:100%;touch-action:manipulation;margin-top:8px;" />
+        </EditForm>
+    </div>
+</div>
+
+@code {
+
+    // IdRegistro asignado al insertar el encabezado nuevo
+    private long idRegistroActual = 0;
+
+    private IEnumerable<EmpleadoExt> empleados = Enumerable.Empty<EmpleadoExt>();
+    RadzenDataGrid<EmpleadoExt>? gridEmpleados;
+    List<EmpleadoExt> empleadosSeleccionados = new();
+
+    private string Titulo    = "Registro de Avances";
+    private string UrlRetorno = "./geoagrlaborauxiliarlist";
+    bool InProcess = true;
+    bool sincronizar = true;
+
+    private DateOnly fechaHoy = DateOnly.FromDateTime(DateTime.Now);
+    private DateOnly fechaMin = DateOnly.FromDateTime(DateTime.Now.AddDays(-60));
+
+    // Listas para los pop
+    private IEnumerable<GeoAgrFinca>?    listaFincas    = Enumerable.Empty<GeoAgrFinca>();
+    private IEnumerable<GeoAgrLote>?     listaLotes     = Enumerable.Empty<GeoAgrLote>();
+    private IEnumerable<GeoAgrOt>? listaOts = Enumerable.Empty<GeoAgrOt>();
+    private IEnumerable<GeoAgrOtLabor>?  listaOtLabores = Enumerable.Empty<GeoAgrOtLabor>();
+    private IEnumerable<GeoAgrRecursoConcepto>? listaRecursoConcepto = Enumerable.Empty<GeoAgrRecursoConcepto>();
+
+    private EncabezadoForm encabezado = new();
+    private List<GeoAgrLaborAuxiliarDetExt> detalles = new();
+
+    MarcasDBLocal marcaDBLocal = new();
+
+    // Detalle temporal activo (el que abrió el modal)
+    private GeoAgrLaborAuxiliarDetExt? detActivo;
+
+    public class EncabezadoForm
+    {
+        public string?  Compania    { get; set; }
+        public string?  IdEmpleado  { get; set; }
+        public DateOnly FechaDO     { get; set; } = DateOnly.FromDateTime(DateTime.Now);
+        public string?  Comentarios { get; set; }
+    }
+
+    public class GeoAgrLaborAuxiliarDetExt : GeoAgrLaborAuxiliarDet
+    {
+        public string NombreOt { get; set; } = "";
+        public string NombreLabor { get; set; } = "";
+        public string NombreRecurso { get; set; } = "";
+    }
+
+    /// <param name="fechaLabor">Fecha de la labor; solo se mostrarán empleados con marca tipo 1 en esa fecha.</param>
+    private async Task CargarEmpleados(DateTime fechaLabor)
+    {
+        try{
+            IEnumerable<cEmpleado>? empleadosGT = Enumerable.Empty<cEmpleado>();
+
+
+            empleadosGT = await marcaDBLocal.GetEmpleadoAsync() ?? Enumerable.Empty<cEmpleado>();
+
+            if (empleadosGT is not null)
+            {
+                empleados = empleadosGT.Select(e => new EmpleadoExt
+                {
+                    IdNumero = e.IdNumero,
+                    Nombre = $"{e.Nombre} ({e.IdNumero})",
+                    IdGrupo = e.IdGrupo,
+                    IdPlanilla = e.IdPlanilla,
+                    DescPlanilla = e.Ph_Planilla == null ? "" : e.Ph_Planilla!.planilla,
+                    DescGrupo = e.Ph_Grupo == null ? "" : e.Ph_Grupo!.descripcion,
+                    DescDepartamento = e.Departamento == null ? "" : e.Departamento!.DESCRIPCION,
+                });
+
+                IEnumerable<cPh_Grupo>? grupoIds = Enumerable.Empty<cPh_Grupo>();
+
+                var phUsuario = loginState.PhUsuario!;
+                if (phUsuario is not null)
+                {
+                    List<string> ListGrupos = phUsuario.GRUPOS?.Split(',').ToList()!;
+                    grupoIds = from l in ListGrupos
+                                select new cPh_Grupo { idgrupo = int.Parse(l) };
+                }
+
+
+                if (grupoIds is not null)
+                {
+                    empleados = from e in empleados
+                                join g in grupoIds on e.IdGrupo equals g.idgrupo
+                                select e;
+                }
+                else
+                {
+                    empleados = Enumerable.Empty<EmpleadoExt>();
+                }
+
+                // ── Filtrar por marca de entrada (tipo 1) para la fecha de la labor ──
+                // var marcaIds = await marcaDBLocal.GetIdNumerosConMarcaEntradaAsync(fechaLabor);
+                // empleados = empleados.Where(e => marcaIds.Contains(e.IdNumero ?? ""));
+            }
+        }
+        catch (Exception e)
+        {
+            await swal.FireAsync("Error", "Cargando Empleados." + e.Message, SweetAlertIcon.Error);
+        }
+
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            // ── Catálogos: independientes entre sí → se lanzan sin await ─────────
+            var tFincas    = marcaDBLocal.GetGeoAgrFincaAsync(loginState.CompaniaSeleccionada, loginState.PaisSeleccionado);
+            var tLotes     = marcaDBLocal.GetGeoAgrLoteAsync(loginState.CompaniaSeleccionada);
+            var tOts       = marcaDBLocal.GetGeoAgrOtAsync(loginState.CompaniaSeleccionada);
+            var tOtLabores = marcaDBLocal.GetGeoAgrOtLaborAsync(loginState.CompaniaSeleccionada);
+            var tRecursoConcepto = marcaDBLocal.GetGeoAgrRecursoConceptoAsync(loginState.CompaniaSeleccionada);
+
+            var empleadosTask = CargarEmpleados(DateTime.Today);
+
+            await Task.WhenAll(tFincas, tLotes, tOts, tOtLabores, empleadosTask, tRecursoConcepto);
+
+            listaFincas    = tFincas.Result;
+            listaLotes     = tLotes.Result;
+            listaOtLabores = tOtLabores.Result;
+            listaRecursoConcepto = tRecursoConcepto.Result;
+            listaOts       = tOts.Result;
+
+            encabezado.Compania   = loginState.Empleado.IdCCosto;
+            encabezado.IdEmpleado = loginState.Empleado.IdNumero;
+        }
+        catch (Exception ex)
+        {
+            await swal.FireAsync("Error", "Al inicializar el formulario: " + ex.Message, SweetAlertIcon.Error);
+        }
+        finally
+        {
+            InProcess = false;
+        }
+    }
+
+    private void AgregarDetalle()
+    {
+        int nextItem = detalles.Count > 0 ? detalles.Max(d => d.Item) + 1 : 1;
+        detalles.Add(new GeoAgrLaborAuxiliarDetExt
+        {
+            Compania   = loginState.CompaniaSeleccionada,
+            IdEmpleado = encabezado.IdEmpleado,
+            Item       = nextItem,
+            EstadoId   = 0,
+        });
+        StateHasChanged();
+    }
+
+    private void EliminarDetalle(GeoAgrLaborAuxiliarDetExt det)
+    {
+        detalles.Remove(det);
+        // Renumerar items
+        for (int i = 0; i < detalles.Count; i++)
+            detalles[i].Item = i + 1;
+        StateHasChanged();
+    }
+
+    private async Task GuardarDatos()
+    {
+        InProcess = true;
+        try
+        {
+            if (!await Validar()) return;
+
+            var comp    = loginState.CompaniaSeleccionada;
+            var fechaDT = encabezado.FechaDO.ToDateTime(TimeOnly.MinValue);
+
+            var header = new GeoAgrLaborAuxiliar
+            {
+                Compania    = comp,
+                IdEmpleado  = encabezado.IdEmpleado!,
+                Fecha       = fechaDT,
+                Comentarios = encabezado.Comentarios,
+                EstadoId = 0,
+            };
+
+            // ── 1. Encabezado ────────────────────────────────────────────────
+            idRegistroActual = await marcaDBLocal.InsertGeoAgrLaborAuxiliarAsync(header);
+
+            // ── 2. Expansión cartesiana: un GeoAgrLaborAuxiliarDet por (Item × Empleado asignado) ──
+            var listaDets = detalles.SelectMany(d => empleadosSeleccionados.Select(e => new GeoAgrLaborAuxiliarDet
+            {
+                Compania            = comp,
+                IdEmpleado          = encabezado.IdEmpleado,
+                Fecha               = fechaDT,
+                Item                = d.Item,
+                Bloque              = d.Bloque,
+                Finca               = d.Finca,
+                Lote                = d.Lote,
+                Ot                  = d.Ot,
+                Labor               = d.Labor,
+                Recurso             = d.Recurso,
+                CantidadRendimiento = d.CantidadRendimiento,
+                Unidad              = d.Unidad,
+                HorasAprobadas      = 0M,
+                EstadoId            = d.EstadoId,
+                IdEmpleadoAsignado  = e.IdNumero,
+            })).ToList();
+
+            // ── 3. Guardar detalles (alta, asociados al IdRegistro nuevo) ────
+            await marcaDBLocal.SaveGeoAgrLaborAuxiliarDetAsync(idRegistroActual, listaDets);
+
+            await GuardarEnGeotime(header, listaDets, idRegistroActual);
+
+            await swal.FireAsync("Atención", "El proceso se realizó satisfactoriamente", SweetAlertIcon.Success);
+            NavigationManager.NavigateTo(UrlRetorno);
+        }
+        catch (Exception ex)
+        {
+            await swal.FireAsync("Error", "Al guardar los datos: " + ex.Message, SweetAlertIcon.Error);
+        }
+        finally
+        {
+            InProcess = false;
+        }
+    }
+
+    private async Task GuardarEnGeotime(GeoAgrLaborAuxiliar header, List<GeoAgrLaborAuxiliarDet> listaDets, long idRegistroActual)
+    {
+        try
+        {
+            if (!sincronizar)
+                return; // Si no se puede sincronizar, salir sin hacer nada
+
+            var listaDetalle = listaDets.Select(d => new cSolicitudAuxLaborDet
+            {
+                SOLICITUDID = 0, // Se asignará en Geotime
+                IDNUMERO = d.IdEmpleadoAsignado!,
+                ITEM = d.Item,
+                BLOQUE = d.Bloque!,
+                FINCA = d.Finca!,
+                LOTE = d.Lote!,
+                OT = d.Ot!,
+                LABOR = d.Labor!,
+                RECURSO = d.Recurso!,
+                CANTIDAD_RENDIMIENTO = (decimal)d.CantidadRendimiento!,
+                UNIDAD = d.Unidad!,
+                COMPANIA = header.Compania!,
+                FECHA = header.Fecha,
+                HORAS_APROBADAS = 0M,
+                ESTADOID = 1,
+            }).ToList();
+
+            var laborGT = new cSolicitudAuxLabor
+            {
+                ID = 0, // Se asignará en Geotime
+                COMPANIA    = header.Compania!,
+                IDRESPONSABLE  = header.IdEmpleado!,
+                FECHA       = header.Fecha,
+                COMENTARIOS = header.Comentarios,
+                ESTADOID = 1,                
+                cSolicitudAuxLaborDet = listaDetalle,
+                FECHAREGISTRO = DateTime.Now,
+                FECHAMODIFICA = DateTime.Now,
+                IDREGISTROAPP = idRegistroActual, // Para vincular con nuestro registro local
+                IDUSUARIOMODIFICA = loginState.Empleado.IdNumero!,
+                IDUSUARIOREGISTRA = loginState.Empleado.IdNumero!,
+            };
+            var response = await geoConnect.Post("SolicitudAuxLabor", new List<cSolicitudAuxLabor>() { laborGT });
+
+            if (response.Id=="0")
+            {
+                // Actualizar nuestro registro local con el ID asignado por Geotime
+                await marcaDBLocal.SaveGeoAgrLaborAuxiliarEstadoAsync(idRegistroActual, header.Compania!);
+
+            }
+
+        }
+        catch (Exception ex)
+        {
+            // No interrumpe el flujo principal, solo muestra una alerta
+            await swal.FireAsync("Error", "Al sincronizar con Geotime: " + ex.Message, SweetAlertIcon.Error);
+        }
+    }
+
+    private async Task<bool> Validar()
+    {
+        if (string.IsNullOrEmpty(encabezado.IdEmpleado))
+        {
+            await swal.FireAsync("Atención", "No se pudo determinar el empleado.", SweetAlertIcon.Warning);
+            return false;
+        }
+        if (empleadosSeleccionados.Count == 0)
+        {
+            await swal.FireAsync("Atención", "Debe seleccionar al menos un colaborador.", SweetAlertIcon.Warning);
+            return false;
+        }
+        if (detalles.Count == 0)
+        {
+            await swal.FireAsync("Atención", "Debe agregar al menos una línea de detalle.", SweetAlertIcon.Warning);
+            return false;
+        }
+        foreach (var det in detalles)
+        {
+            var camposFaltantes = new List<string>();
+            if (string.IsNullOrWhiteSpace(det.Finca)) camposFaltantes.Add("Finca");
+            if (string.IsNullOrWhiteSpace(det.Lote)) camposFaltantes.Add("Lote");
+            if (string.IsNullOrWhiteSpace(det.Ot)) camposFaltantes.Add("OT");
+            if (string.IsNullOrWhiteSpace(det.Labor)) camposFaltantes.Add("Labor");
+            if (string.IsNullOrWhiteSpace(det.Recurso)) camposFaltantes.Add("Recurso");
+            if (det.CantidadRendimiento is null or <= 0) camposFaltantes.Add("Cantidad Rendimiento");
+
+            if (camposFaltantes.Count > 0)
+            {
+                await swal.FireAsync("Atención",
+                    $"Ítem {det.Item}: faltan datos obligatorios → {string.Join(", ", camposFaltantes)}.",
+                    SweetAlertIcon.Warning);
+                return false;
+            }
+        }
+        return true;
+    }
+
+    // Modales
+
+    private async Task OnShowModalFinca(GeoAgrLaborAuxiliarDetExt det)
+    {
+        detActivo = det;
+        try
+        {
+            await dialogService.OpenAsync<GeoAgrFincaPop>("Fincas",
+                new Dictionary<string, object>
+                {
+                    { "OnGeoAgrFincaSelected", EventCallback.Factory.Create<GeoAgrFinca>(this, HideModalFinca) },
+                    { "fincas", listaFincas! }
+                }!,
+                new DialogOptions
+                {
+                    Resizable = true, Draggable = true,
+                    Resize = base.OnResize, Drag = base.OnDrag,
+                    Width = "700px", Height = "600px",
+                    Left = Settings?.Left, Top = Settings?.Top
+                });
+            await SaveStateAsync();
+        }
+        catch (Exception ex)
+        {
+            await swal.FireAsync("Error", "Al cargar las fincas: " + ex.Message, SweetAlertIcon.Error);
+        }
+    }
+
+    private async Task HideModalFinca(GeoAgrFinca param)
+    {
+        if (detActivo is not null)
+        {
+            detActivo.Bloque = param.Bloque;
+            detActivo.Finca  = param.Finca;
+        }
+        dialogService.Close(true);
+        StateHasChanged();
+    }
+
+    private async Task OnShowModalLote(GeoAgrLaborAuxiliarDetExt det)
+    {
+        detActivo = det;
+        try
+        {
+            //validar que bloque y finca hayan sisdo seleccionados para filtrar los lotes
+            if (string.IsNullOrWhiteSpace(det.Bloque) || string.IsNullOrWhiteSpace(det.Finca))
+            {
+                await swal.FireAsync("Atención", "Debe seleccionar primero el Bloque y la Finca para cargar los lotes correspondientes.", SweetAlertIcon.Warning);
+                return;
+            }
+
+            var lotesFiltrados = listaLotes?
+                .Where(l => l.Bloque == det.Bloque && l.Finca == det.Finca)
+                ?? Enumerable.Empty<GeoAgrLote>();
+
+            await dialogService.OpenAsync<GeoAgrLotePop>("Lotes",
+                new Dictionary<string, object>
+                {
+                    { "OnGeoAgrLoteSelected", EventCallback.Factory.Create<GeoAgrLote>(this, HideModalLote) },
+                    { "lotes", lotesFiltrados }
+                }!,
+                new DialogOptions
+                {
+                    Resizable = true, Draggable = true,
+                    Resize = base.OnResize, Drag = base.OnDrag,
+                    Width = "700px", Height = "600px",
+                    Left = Settings?.Left, Top = Settings?.Top
+                });
+            await SaveStateAsync();
+        }
+        catch (Exception ex)
+        {
+            await swal.FireAsync("Error", "Al cargar los lotes: " + ex.Message, SweetAlertIcon.Error);
+        }
+    }
+
+    private async Task HideModalLote(GeoAgrLote param)
+    {
+        if (detActivo is not null)
+            detActivo.Lote = param.Lote;
+        dialogService.Close(true);
+        StateHasChanged();
+    }
+
+    private async Task OnShowModalOt(GeoAgrLaborAuxiliarDetExt det)
+    {
+        detActivo = det;
+        try
+        {
+            //validar que bloque y finca hayan sisdo seleccionados para filtrar los lotes
+            if (string.IsNullOrWhiteSpace(det.Bloque) || string.IsNullOrWhiteSpace(det.Finca))
+            {
+                await swal.FireAsync("Atención", "Debe seleccionar primero el Bloque y la Finca para cargar los lotes correspondientes.", SweetAlertIcon.Warning);
+                return;
+            }
+
+            var otsFiltradas = listaOts?
+                .Where(l => l.Bloque == det.Bloque && l.Finca == det.Finca)
+                ?? Enumerable.Empty<GeoAgrOt>();
+
+            await dialogService.OpenAsync<GeoAgrOtPop>("OTs",
+                new Dictionary<string, object>
+                {
+                    { "OnGeoAgrOtSelected", EventCallback.Factory.Create<GeoAgrOt>(this, HideModalOt) },
+                    { "ots", otsFiltradas }
+                }!,
+                new DialogOptions
+                {
+                    Resizable = true, Draggable = true,
+                    Resize = base.OnResize, Drag = base.OnDrag,
+                    Width = "700px", Height = "600px",
+                    Left = Settings?.Left, Top = Settings?.Top
+                });
+            await SaveStateAsync();
+        }
+        catch (Exception ex)
+        {
+            await swal.FireAsync("Error", "Al cargar las labores: " + ex.Message, SweetAlertIcon.Error);
+        }
+    }
+
+    private async Task HideModalOt(GeoAgrOt param)
+    {
+        if (detActivo is not null)
+        {
+            detActivo.Ot = param.Ot;
+            detActivo.NombreOt = param.NombreOt!;
+        }
+        dialogService.Close(true);
+        StateHasChanged();
+    }
+
+    private async Task OnShowModalOtLabor(GeoAgrLaborAuxiliarDetExt det)
+    {
+        detActivo = det;
+        try
+        {
+            //validar que bloque, finca y OT hayan sido seleccionados para filtrar los lotes
+            if (string.IsNullOrWhiteSpace(det.Bloque) || string.IsNullOrWhiteSpace(det.Finca) || string.IsNullOrWhiteSpace(det.Ot))
+            {
+                await swal.FireAsync("Atención", "Debe seleccionar primero el Bloque, la Finca y la OT para cargar las labores correspondientes.", SweetAlertIcon.Warning);
+                return;
+            }
+
+            var laboresFiltradas = listaOtLabores?
+                .Where(l => l.Bloque == det.Bloque && l.Finca == det.Finca && l.Ot == det.Ot)
+                ?? Enumerable.Empty<GeoAgrOtLabor>();
+
+            await dialogService.OpenAsync<GeoAgrOtLaborPop>("Labores",
+                new Dictionary<string, object>
+                {
+                    { "OnGeoAgrOtLaborSelected", EventCallback.Factory.Create<GeoAgrOtLabor>(this, HideModalOtLabor) },
+                    { "otLabores", laboresFiltradas }
+                }!,
+                new DialogOptions
+                {
+                    Resizable = true, Draggable = true,
+                    Resize = base.OnResize, Drag = base.OnDrag,
+                    Width = "700px", Height = "600px",
+                    Left = Settings?.Left, Top = Settings?.Top
+                });
+            await SaveStateAsync();
+        }
+        catch (Exception ex)
+        {
+            await swal.FireAsync("Error", "Al cargar las labores: " + ex.Message, SweetAlertIcon.Error);
+        }
+    }
+
+    private async Task HideModalOtLabor(GeoAgrOtLabor param)
+    {
+        if (detActivo is not null)
+        {
+            detActivo.Labor = param.Labor;
+            detActivo.NombreLabor = param.NombreLabor;
+        }
+        dialogService.Close(true);
+        StateHasChanged();
+    }
+
+    private async Task OnShowModalRecurso(GeoAgrLaborAuxiliarDetExt det)
+    {
+        detActivo = det;
+        try
+        {
+            var recursosFiltrados = listaRecursoConcepto.Where(l => l.Compania == loginState.CompaniaSeleccionada)
+                ?? Enumerable.Empty<GeoAgrRecursoConcepto>();
+
+            await dialogService.OpenAsync<GeoAgrRecursoConceptoPop>("Recursos",
+                new Dictionary<string, object>
+                {
+                    { "OnGeoAgrRecursoConceptoSelected", EventCallback.Factory.Create<GeoAgrRecursoConcepto>(this, HideModalRecurso) },
+                    { "recursos", recursosFiltrados }
+                }!,
+                new DialogOptions
+                {
+                    Resizable = true,
+                    Draggable = true,
+                    Resize = base.OnResize,
+                    Drag = base.OnDrag,
+                    Width = "700px",
+                    Height = "600px",
+                    Left = Settings?.Left,
+                    Top = Settings?.Top
+                });
+            await SaveStateAsync();
+        }
+        catch (Exception ex)
+        {
+            await swal.FireAsync("Error", "Al cargar las labores: " + ex.Message, SweetAlertIcon.Error);
+        }
+    }
+
+    private async Task HideModalRecurso(GeoAgrRecursoConcepto param)
+    {
+        if (detActivo is not null)
+        {
+            detActivo.Recurso = param.Recurso;
+            detActivo.Unidad = param.Unidad;
+            detActivo.NombreRecurso = param.Descripcion;
+        }
+        
+        dialogService.Close(true);
+        StateHasChanged();
+    }
+
+    
+
+    void OnRender(DataGridRenderEventArgs<EmpleadoExt> args)
+    {
+        // El orden se gestiona en EmpleadosOrdenados (seleccionados primero, luego por nombre)
+    }
+
+    private bool IsSelected(cEmpleado empleado)
+    {
+        return empleadosSeleccionados.Any(e => e.IdNumero == empleado.IdNumero);
+    }
+
+    private void OnSelectionChanged(bool seleccionado, EmpleadoExt empleado)
+    {
+        if (seleccionado)
+        {
+            if (!empleadosSeleccionados.Any(e => e.IdNumero == empleado.IdNumero))
+                empleadosSeleccionados.Add(empleado);
+        }
+        else
+        {
+            empleadosSeleccionados.RemoveAll(e => e.IdNumero == empleado.IdNumero);
+        }
+        // Re-render para que EmpleadosOrdenados refleje el nuevo estado de selección
+        StateHasChanged();
+    }
+
+    /// <summary>Seleccionados primero (orden estable), luego el resto por nombre.</summary>
+    private IEnumerable<EmpleadoExt> EmpleadosOrdenados =>
+        empleados
+            .OrderByDescending(e => IsSelected(e))
+            .ThenBy(e => e.Nombre);
+
+    /// <summary>True cuando todos los empleados de la lista están seleccionados.</summary>
+    private bool TodosSeleccionados =>
+        empleados.Any() && empleados.All(e => IsSelected(e));
+
+    /// <summary>Selecciona o deselecciona todos los empleados de la lista.</summary>
+    private void OnSeleccionarTodos(bool seleccionar)
+    {
+        if (seleccionar)
+        {
+            // Agregar los que aún no estén en la lista de seleccionados
+            foreach (var e in empleados)
+            {
+                if (!empleadosSeleccionados.Any(s => s.IdNumero == e.IdNumero))
+                    empleadosSeleccionados.Add(e);
+            }
+        }
+        else
+        {
+            empleadosSeleccionados.Clear();
+        }
+        StateHasChanged();
+    }
+}

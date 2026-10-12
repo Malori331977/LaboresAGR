@@ -1,0 +1,189 @@
+﻿@page "/configuracionapi"
+@using System.Text.Json
+@using PortalEmpleadoGeotime.Client.Data.DataBaseLocal
+@using Radzen
+
+@layout IndexLayout
+
+<div class="ln-home-root">
+	<PageReturn Titulo="@Titulo" UrlRetorno="@UrlRetorno" />
+
+	<div class=" row text-center w-100">
+		<div class="col mb-2">
+			<RadzenButton class="rz-border-radius-6" ButtonType="Radzen.ButtonType.Button" Size="Radzen.ButtonSize.ExtraSmall" Icon="search" Text="Importar Configuración" ButtonStyle="ButtonStyle.Base" Click="PickFile" />
+		</div>
+	</div>
+
+	<RadzenTemplateForm TItem="cParametroApiLocal"
+						Data=@parametrosApi Submit=@GuardarDatos InvalidSubmit=@OnInvalidSubmit>
+
+		<RadzenFieldset Text="">
+			<RadzenStack Orientation="Radzen.Orientation.Vertical" JustifyContent="JustifyContent.Center" AlignItems="Radzen.AlignItems.Center" Gap="0.5rem" class="w-100">
+				<RadzenRow Gap="0.5rem" class="w-100">
+					<RadzenColumn Size="12" SizeSM="12" SizeMD="12" SizeLG="12" SizeXL="12" class="w-100">
+						<RadzenText TextStyle="TextStyle.Subtitle2" TagName="TagName.H3" class="mb-0 ">Url de Api de Geotime</RadzenText>
+						<RadzenTextBox @bind-Value=@parametrosApi.ApiGeoTimeUrl Style="width: 100%" Name="usuario" class="rz-border-radius-2" />
+						<RadzenRequiredValidator Component="usuario" Text="La Url del Api es requerido" Popup=true Style="position: absolute" />
+					</RadzenColumn>
+				</RadzenRow>
+				<RadzenRow Gap="3rem">
+					<RadzenColumn Size="12" SizeSM="12" SizeMD="12" SizeLG="12" SizeXL="12">
+						<RadzenText TextStyle="TextStyle.Subtitle2" TagName="TagName.H3" class="mb-0 ">Base de Datos de Geotime</RadzenText>
+						<RadzenTextBox @bind-Value=@parametrosApi.ApiGeotimeDataBase Style="width: 100%" Name="basedatos" class="rz-border-radius-2" />
+						<RadzenRequiredValidator Component="basedatos" Text="La Base de Datos es requerida" Popup=true Style="position: absolute" />
+					</RadzenColumn>
+				</RadzenRow>
+				<RadzenRow Gap="3rem">
+					<RadzenColumn Size="12" SizeSM="12" SizeMD="12" SizeLG="12" SizeXL="12">
+						<RadzenText TextStyle="TextStyle.Subtitle2" TagName="TagName.H3" class="mb-0 ">Esquema de Geotime</RadzenText>
+						<RadzenTextBox @bind-Value=@parametrosApi.ApiGeotimeSchema Style="width: 100%" Name="esquema" class="rz-border-radius-2" />
+						<RadzenRequiredValidator Component="esquema" Text="El nombre del esquema es requerido" Popup=true Style="position: absolute" />
+					</RadzenColumn>
+				</RadzenRow>
+
+				<RadzenRow Gap="3rem">
+					<RadzenColumn Size="12" SizeSM="12" SizeMD="12" SizeLG="12" SizeXL="12">
+						<RadzenText TextStyle="TextStyle.Subtitle2" TagName="TagName.H3" class="mb-0 ">Url de Api de Auxiliar</RadzenText>
+						<RadzenTextBox @bind-Value=@parametrosApi.ApiAuxiliarUrl Style="width: 100%" Name="usuario" class="rz-border-radius-2" />
+						<RadzenRequiredValidator Component="usuario" Text="La Url del Api es requerido" Popup=true Style="position: absolute" />
+					</RadzenColumn>
+				</RadzenRow>
+				<RadzenRow Gap="3rem">
+					<RadzenColumn Size="12" SizeSM="12" SizeMD="12" SizeLG="12" SizeXL="12">
+						<RadzenText TextStyle="TextStyle.Subtitle2" TagName="TagName.H3" class="mb-0 ">Esquema de Auxiliar</RadzenText>
+						<RadzenTextBox @bind-Value=@parametrosApi.ApiAuxiliarSchema Style="width: 100%" Name="esquema" class="rz-border-radius-2" />
+						<RadzenRequiredValidator Component="esquema" Text="El nombre del esquema es requerido" Popup=true Style="position: absolute" />
+					</RadzenColumn>
+				</RadzenRow>
+
+				<RadzenRow Gap="3rem">
+					<RadzenColumn Size="12" SizeSM="12" SizeMD="12" SizeLG="12" SizeXL="12">
+						<RadzenText TextStyle="TextStyle.Subtitle2" TagName="TagName.H3" class="mb-0 ">Id de Cliente</RadzenText>
+						<RadzenTextBox @bind-Value=@parametrosApi.ApiClientId Style="width: 100%" Name="idcliente" class="rz-border-radius-2" />
+						<RadzenRequiredValidator Component="idcliente" Text="El Id de Cliente es requerido" Popup=true Style="position: absolute" />
+					</RadzenColumn>
+				</RadzenRow>
+				<RadzenRow Gap="3rem">
+					<RadzenColumn Size="12" SizeSM="12" SizeMD="12" SizeLG="12" SizeXL="12">
+						<RadzenText TextStyle="TextStyle.Subtitle2" TagName="TagName.H3" class="mb-0 ">Usuario</RadzenText>
+						<RadzenTextBox @bind-Value=@parametrosApi.ApiUser Style="width: 100%" Name="usuario" class="rz-border-radius-2" />
+						<RadzenRequiredValidator Component="usuario" Text="El Id de Usuario es requerido" Popup=true Style="position: absolute" />
+					</RadzenColumn>
+				</RadzenRow>
+				<RadzenRow Gap="3rem">
+					<RadzenColumn Size="12" SizeSM="12" SizeMD="12" SizeLG="12" SizeXL="12">
+						<RadzenText TextStyle="TextStyle.Subtitle2" TagName="TagName.H3" class="mb-0 ">Password</RadzenText>
+						<RadzenTextBox @bind-Value=@parametrosApi.ApiPassword Style="width: 100%" Name="password" class="rz-border-radius-2" />
+						<RadzenRequiredValidator Component="password" Text="El Password es requerido" Popup=true Style="position: absolute" />
+					</RadzenColumn>
+				</RadzenRow>
+				<RadzenRow Gap="3rem">
+					<RadzenColumn Size="12" SizeSM="12" SizeMD="12" SizeLG="12" SizeXL="12">
+						<RadzenButton class="rz-border-radius-6" ButtonType="Radzen.ButtonType.Submit" Size="Radzen.ButtonSize.ExtraSmall" Icon="app_settings_alt" Text="Guardar Configuración" ButtonStyle="ButtonStyle.Base" />
+					</RadzenColumn>
+				</RadzenRow>
+			</RadzenStack>
+		</RadzenFieldset>
+	</RadzenTemplateForm>
+</div>
+
+
+
+
+
+@code {
+	private string UrlRetorno = "/";
+	private string Titulo = "Parámetros de Conexión";
+
+	private cParametroApiLocal parametrosApi = new();
+
+	private InputText txtCompania = new();
+	private InputText txtUrlApiBackend=new();
+	private InputText txtUserApiBackend = new();
+	private InputText txtPasswordBackend = new();
+	private InputText txtUrlApiGa=new();
+	private InputText txtSchemaApiGa=new();
+	private InputText txtBaseDatosApiGa = new();
+	//private string selectCompanias = "";
+	MarcasDBLocal marcasDBLocal = new MarcasDBLocal();
+
+	protected override async void OnInitialized()
+	{
+		if ((await ConfigFile.ExistsConfigFile())) {
+			parametrosApi = await ConfigFile.GetConfigFile();
+		}
+        StateHasChanged();
+	}
+
+	void OnInvalidSubmit(FormInvalidSubmitEventArgs args)
+	{
+		Console.WriteLine($"InvalidSubmit: {JsonSerializer.Serialize(args, new JsonSerializerOptions() { WriteIndented = true })}");
+	}
+
+	private async Task GuardarDatos()
+	{
+
+		var resp = await marcasDBLocal.SaveParametroApiAsync(parametrosApi);
+
+		if (resp!=1){
+			await swal.FireAsync("Atención", "No se realizado la configuración de la conexión.", SweetAlertIcon.Error);
+		}
+		else{
+			await swal.FireAsync("Atención", "Los datos se guardaron satisfactoriamente.", SweetAlertIcon.Success);
+			NavigationManager.NavigateTo("/");
+		}
+	}
+
+	private async void PickFile()
+	{
+		PermissionStatus status = await Permissions.RequestAsync<Permissions.StorageWrite>();
+		PermissionStatus status2 = await Permissions.CheckStatusAsync<Permissions.StorageWrite>();
+
+		if (status == Microsoft.Maui.ApplicationModel.PermissionStatus.Granted)
+		{
+			var customFileType = new FilePickerFileType(
+				new Dictionary<DevicePlatform, IEnumerable<string>>
+                {
+                    { DevicePlatform.iOS, new[] { ".xml" } }, // UTType values
+                    { DevicePlatform.Android, new[] { "text/xml" } }, // MIME type
+                    { DevicePlatform.WinUI, new[] { ".xml" } }, // file extension
+                    { DevicePlatform.Tizen, new[] { "*/*" } },
+					{ DevicePlatform.macOS, new[] { "xml"} }, // UTType values
+                });
+
+			PickOptions options = new()
+			{
+				PickerTitle = "Seleccione archivo de configuración",
+				FileTypes = customFileType
+			};
+
+			var file = await FilePicker.PickAsync(options);
+
+			if (file is not null){
+
+				if (file.ContentType == "text/xml"){
+					var parametros = ConfigFile.ImportarArchivoConfiguracion(file.FullPath);
+					parametros.Id = 1;
+					if (!String.IsNullOrEmpty(parametros.ApiGeoTimeUrl))
+					{
+						var resp = await marcasDBLocal.SaveParametroApiAsync(parametros);
+
+						if (resp > 0)
+						{
+							await swal.FireAsync("Atención", "Los datos se guardaron satisfactoriamente.", SweetAlertIcon.Success);
+							NavigationManager.NavigateTo("/");
+						}
+						else
+						{
+							await swal.FireAsync("Atención", "No se realizó la configuración de la conexión.", SweetAlertIcon.Error);
+						}
+					}
+				}
+				else{
+					await swal.FireAsync("Atención", "El formato del archivo no es correcto.", SweetAlertIcon.Error);
+				}				
+			}
+		}
+
+	}
+}

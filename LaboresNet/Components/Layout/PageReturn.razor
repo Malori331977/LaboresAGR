@@ -1,0 +1,39 @@
+﻿@inject NavigationManager NavigationManager
+
+<div class="card-header">
+    <div class="row">
+        <div class="col-1 text-start">
+            @if (!isAndroidOriOS)
+            {
+                <button class="btn btn-sm btn-secondary rounded-circle" @onclick="async () => await OnClickRetorno()">
+                    <RadzenIcon Icon="arrow_back" />
+                </button>
+            }
+        </div>
+        <div class="col text-center">
+            <h5>@Titulo</h5>
+        </div>
+        <div class="col-1 text-start">
+        </div>
+    </div>
+
+</div>
+
+
+@code {
+    [Parameter]
+    public string Titulo { get; set; }
+
+    [Parameter]
+    public string UrlRetorno { get; set; }
+
+    private bool isAndroidOriOS = DeviceInfo.Platform == DevicePlatform.Android || DeviceInfo.Platform == DevicePlatform.iOS;
+
+    private async Task OnClickRetorno()
+    {
+        NavigationManager.NavigateTo(UrlRetorno);
+
+    }
+}
+
+

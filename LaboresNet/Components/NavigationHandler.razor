@@ -1,0 +1,22 @@
+@using LaboresNet.Data.Navigation
+@inject NavigationService NavigationService
+@inject BlazorNavigationService BlazorNavigationService
+
+@implements IDisposable
+
+@code {
+    protected override void OnInitialized()
+    {
+        NavigationService.BackRequested += OnBackRequested;
+    }
+
+    private async void OnBackRequested(object? sender, EventArgs e)
+    {
+        await BlazorNavigationService.GoBackAsync();
+    }
+
+    public void Dispose()
+    {
+        NavigationService.BackRequested -= OnBackRequested;
+    }
+}

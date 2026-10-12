@@ -1,0 +1,645 @@
+﻿@page "/marcas"
+@page "/marcas/{EmpleadoId}"
+@layout MainLayout
+
+@using System;
+@using System.Net;
+@using System.Text;
+@using Microsoft.Maui.ApplicationModel;
+@using Microsoft.Maui.Devices.Sensors;
+@using System.Globalization;
+@using PortalEmpleadoGeotime.Client.Data.DataBaseLocal;
+
+
+<div class="card">
+    <div>
+        <PageReturn Titulo="@Titulo" UrlRetorno="@UrlRetorno" />
+    </div>
+    <div class="card-body">
+         <div class="ibm-plex-serif-bold">
+            <RadzenPanel AllowCollapse="true" class="panel-brand" Style="margin-bottom:0.5rem;">
+                <HeaderTemplate>
+                    <span @onclick="VerFaceLogs" @onclick:stopPropagation="true" style="cursor:pointer;">
+                        <RadzenIcon Icon="check_circle" class="me-1" />
+                    </span> Registrar Marcas
+                </HeaderTemplate>
+                <ChildContent>
+                    @if (InProcess)
+                    {
+                        <SpinnerControl></SpinnerControl>
+                    }
+                    @if (showCameraSelector)
+                    {
+                        <div class="d-flex align-items-center gap-2 mb-2 px-1">
+                            <RadzenIcon Icon="videocam" Style="flex-shrink:0;" />
+                            <RadzenDropDown @bind-Value="selectedCameraId"
+                                            Data="@cameras"
+                                            TextProperty="Label"
+                                            ValueProperty="DeviceId"
+                                            Style="flex:1; font-size:small;"
+                                            Change="@OnCameraChanged" />
+                        </div>
+                    }
+                    <div class="dashboard-container">
+                        <div class="menu-grid-single">
+                            
+                            <RadzenCard class="menu-item-card-full rz-p-4 rz-shadow-6" @onclick='() => RegistrarMarca(1)'>
+                                <RadzenIcon class="filled-icon" Icon="login" IconColor="@Colors.Success" Style="font-size: 3rem; margin-bottom: 1rem;" />
+                                <RadzenText TextStyle="TextStyle.Button" class="menu-label rz-color-success">Entrada</RadzenText>
+                            </RadzenCard>
+                             <RadzenCard class="menu-item-card-full rz-p-4 rz-shadow-6" @onclick='() => RegistrarMarca(3)'>
+                                <RadzenIcon class="filled-icon" Icon="restaurant" IconColor="@Colors.Warning" Style="font-size: 3rem; margin-bottom: 1rem;" />
+                                <RadzenText TextStyle="TextStyle.Button" class="menu-label text-warning">Descanso</RadzenText>
+                            </RadzenCard>
+                            <RadzenCard class="menu-item-card-full rz-p-4 rz-shadow-6" @onclick='() => RegistrarMarca(2)'>
+                                <RadzenIcon class="filled-icon" Icon="logout" IconColor="@Colors.Danger" Style="font-size: 3rem; margin-bottom: 1rem;" />
+                                <RadzenText TextStyle="TextStyle.Button" class="menu-label text-danger">Salida</RadzenText>
+                            </RadzenCard>
+            
+                        </div>
+                    </div>
+           
+                </ChildContent>
+            </RadzenPanel>
+            @if (portal_Config!.USARGEOLOCALIZACION && mapsInitialized && latitud > 0)
+            {
+                <RadzenPanel AllowCollapse="true" class="panel-brand" Style="margin-bottom:0.5rem;">
+                    <HeaderTemplate>
+                        <RadzenIcon Icon="location_on" class="me-1" /> Ubicación
+                    </HeaderTemplate>
+                    <ChildContent>
+                        <div id="googleMapContainer" style="width:100%;height:400px">
+
+                        </div>
+                    </ChildContent>
+                </RadzenPanel>
+            }
+
+            <RadzenPanel AllowCollapse="true" class="panel-brand" Style="margin-bottom:0.5rem;">
+                <HeaderTemplate>
+                    <RadzenIcon Icon="notes" class="me-1" /> Marcas registradas
+                </HeaderTemplate>
+                <ChildContent>
+
+                    <RadzenDataGrid @ref="grid" Render="@OnRender" class="rz-border-radius-2"
+                                        PageSizeOptions="@Utiles.PageSizeOptions()"
+                                        TItem="MarcaExt"
+                                        AllowFiltering="true"
+                                        AllowColumnResize="true"
+                                        FilterMode="FilterMode.SimpleWithMenu"
+                                        PageSize="10"
+                                        AllowPaging="true"
+                                        AllowSorting="true"
+                                        AllowMultiColumnSorting="true"
+                                        ShowMultiColumnSortingIndex="true"
+                                        Data="@marcas"
+                                        ColumnWidth="300px"
+                                        FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive"
+                                        FilterCleared=@FilterCleared
+                                        SelectionMode="DataGridSelectionMode.Single"
+                                        LogicalFilterOperator="LogicalFilterOperator.Or"
+                                        FilterPopupRenderMode="PopupRenderMode.OnDemand"
+                                        AllowColumnPicking="false"
+                                        AllowColumnReorder="true"
+                                        RowRender="@RowRender"
+                                        PagerHorizontalAlign="HorizontalAlign.Center"
+                                        ShowPagingSummary="@showPagerSummary"
+                                        Page="@OnPage"
+                                        ColumnReordering="@OnColumnReordering">
+
+                            <PagingSummaryTemplate>
+                                <RadzenIcon Icon="database" Style="color: var(--rz-primary); font-size: var(--rz-pager-summary-font-size);" />
+                                Mostrando pagina @context.CurrentPage De @context.NumberOfPages <b>(Total @context.TotalCount records)</b>
+                            </PagingSummaryTemplate>
+                            <Columns>
+                            <RadzenDataGridColumn TItem="MarcaExt" Property="FechaMarca" Title="Marcas" Width="120px">
+									<Template Context="marca">
+										<RadzenStack Orientation="Radzen.Orientation.Horizontal" Gap="0.5rem" AlignItems="AlignItems.Center">											
+											<RadzenStack Gap="0">
+                                            <RadzenText TextStyle="TextStyle.Subtitle1" class="rz-mb-0">@marca.FechaMarca.ToString("dd/MM/yyyy")</RadzenText>
+                                            <RadzenText TextStyle="TextStyle.Caption" class="rz-mb-0">@marca.hora</RadzenText>
+                                            <RadzenText TextStyle="TextStyle.Subtitle2" class="rz-mb-0">@marca.TipoMarca</RadzenText>
+                                                
+                                            </RadzenStack>
+										</RadzenStack>
+									</Template>
+								</RadzenDataGridColumn>
+                            </Columns>
+                        </RadzenDataGrid>
+
+                   </ChildContent>
+            </RadzenPanel>
+         </div>
+        
+        
+        
+
+
+    </div>
+</div>
+
+
+@code {
+    [Parameter]
+    public string? EmpleadoId { get; set; } = null;
+
+    RadzenDataGrid<MarcaExt> grid = new();
+    private IEnumerable<MarcaExt>? marcas;
+    bool showPagerSummary = true;
+    private bool InProcess = true;
+    private string? dirIp = "";
+    string coordenadas = "";
+    string Titulo = "Registro de Marcas";
+    string UrlRetorno = "./principal";
+    double latitud = 0;
+    double longitud = 0;
+    bool mapsInitialized = false;
+    private cEmpleado empleado = new();
+    private int TipoMarcaGlobal = 0;
+
+    private List<string> descriptores = new();
+    bool sincronizar = false;
+    MarcasDBLocal marcaDBLocal = new();
+
+    // Camera selection
+    public class CameraInfo
+    {
+        [System.Text.Json.Serialization.JsonPropertyName("deviceId")]
+        public string DeviceId { get; set; } = "";
+        [System.Text.Json.Serialization.JsonPropertyName("label")]
+        public string Label { get; set; } = "";
+    }
+    private List<CameraInfo> cameras = new();
+    private string selectedCameraId = "";
+    private bool showCameraSelector = false;
+
+    public class MarcaExt : cMarca
+    {
+        public DateOnly FechaMarca { get; set; }
+        public string TipoMarca { get; set; }
+    }
+
+    cPortal_Config? portal_Config = new cPortal_Config
+        {
+            USARECONOCIMIENTOFACIAL = false,
+            USARGEOLOCALIZACION = false,
+        };
+
+
+    List<MapMarker> markers = new();
+
+    private async Task UpdateMapFromDataAsync()
+    {
+        try
+        {
+            // preparar estructura de markers para JS
+            var jsMarkers = markers.Select(m => new { lat = m.Lat, lng = m.Lng, title = m.Title }).ToArray();
+
+            // Llamar al helper JS que crea/actualiza el mapa nativo
+            await JsRuntime.InvokeVoidAsync("mapInterop.createOrUpdateMap", "googleMapContainer", latitud, longitud, jsMarkers, 8);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("UpdateMapFromDataAsync error: " + ex.Message);
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+
+        try
+        {
+            EmpleadoId = EmpleadoId ?? loginState.Empleado?.IdNumero;
+
+            sincronizar = await geoConnect.ApiDisponible();
+            await GetEmpleado();
+            marcas = await GetMarcas();
+            using (HttpClient client = new HttpClient())
+            {
+                var uri = new Uri("https://ipinfo.io/ip");
+                HttpResponseMessage response = await client.GetAsync(uri);
+                if (response.IsSuccessStatusCode)
+                {
+                    var data = await response.Content.ReadAsStringAsync();
+                    dirIp = data.ToString();
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            await swal.FireAsync("Error", $"Error al cargar Registro de Marcas - Dirección del cliente.  Detalle de error: {e.Message}", SweetAlertIcon.Info);
+        }
+        StateHasChanged();
+
+    }
+
+    private async Task GetEmpleado()
+    {
+        if (sincronizar) {
+            empleado = await geoConnect.GetEmpleado(EmpleadoId!);
+        }
+        else{
+            empleado = await marcaDBLocal.GetEmpleadoAsync(EmpleadoId!);
+        }
+    }
+
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+
+                portal_Config = await geoConnect.GetPortalConfig();
+
+                // Cargar lista de cámaras disponibles
+                var camList = await JsRuntime.InvokeAsync<List<CameraInfo>>("getCameras");
+                if (camList is not null && camList.Count > 1)
+                {
+                    cameras = camList;
+
+                    // Restaurar preferencia guardada; si la cámara ya no está disponible, usar la primera
+                    var savedId = await JsRuntime.InvokeAsync<string?>("loadPreferredCamera");
+                    if (!string.IsNullOrEmpty(savedId) && cameras.Any(c => c.DeviceId == savedId))
+                        selectedCameraId = savedId;  // loadPreferredCamera ya setea _selectedCameraDeviceId en JS
+                    else
+                    {
+                        selectedCameraId = cameras[0].DeviceId;
+                        await JsRuntime.InvokeVoidAsync("setPreferredCamera", selectedCameraId);
+                    }
+
+                    showCameraSelector = true;
+                    StateHasChanged();
+                }
+
+                if (portal_Config!.USARGEOLOCALIZACION)
+                {
+                    // esperar a que la API esté cargada
+                    await JsRuntime.InvokeAsync<System.Text.Json.JsonElement>("initGoogleMaps", portal_Config.MAPAPIKEY);
+                    mapsInitialized = true;
+
+                    var coordenadasGPS = await GetLocationAsync();
+
+                    if (coordenadasGPS is not null)
+                    {
+                        latitud = coordenadasGPS.Latitude;
+                        longitud = coordenadasGPS.Longitude;
+
+                        markers = new()
+                        {
+                            new MapMarker
+                            {
+                                Lat = latitud,
+                                Lng = longitud,
+                                Title = "Tu posición actual",
+                            },
+                        };
+
+                        //                              
+                        await InvokeAsync(StateHasChanged);   // asegura que el div #googleMapContainer exista
+                        await Task.Delay(50); // dar un pequeño margen para el DOM
+                        await UpdateMapFromDataAsync();
+
+                    }
+                    else
+                    {
+                        latitud = 0;
+                        longitud = 0;
+                    }
+
+
+                }
+            }
+            catch (Exception e)
+            {
+                await swal.FireAsync("Error", $"Error al cargar la pagina.  Detalle de error: {e.Message}", SweetAlertIcon.Info);
+            }
+
+
+
+        }
+    }
+
+    private async Task<IEnumerable<MarcaExt>> GetMarcas()
+    {
+        if (loginState.Empleado is null)
+        {
+            NavigationManager.NavigateTo("./");
+        }
+
+        if (String.IsNullOrEmpty(EmpleadoId))
+        {
+            NavigationManager.NavigateTo("./");
+        }
+
+        InProcess = true;
+        List<MarcaExt> listMarcas = new();
+
+        try
+        {
+            IEnumerable<cMarca>? marcasEmpleado=null;
+
+
+            if (sincronizar)
+                marcasEmpleado = await geoConnect.GetMarca(EmpleadoId!, DateTime.Now.ToString("yyyyMMdd"));
+            else
+            {
+                var marcaPendiente = await marcaDBLocal.GetMarcaPendiente();
+
+                if (marcaPendiente is not null)
+                {
+                    marcasEmpleado = (from m in marcaPendiente
+                                      where m.idnumero == EmpleadoId
+                                      select new cMarca
+                                      {
+                                          idnumero = m.idnumero,
+                                          idplanilla = m.idplanilla,
+                                          fecha = (DateTime)m.fecha!,
+                                          hora = m.hora,
+                                          tipo = (int)m.tipo!,
+                                          idterminal = m.idterminal,
+                                          estado = m.estado.ToString(),
+                                          fecha_reg = m.fecha_reg,
+                                          long_reg = m.long_reg,
+                                          lat_reg = m.lat_reg,
+                                          imagen_reg = m.imagen_reg,
+                                          gps_cell = m.gps_cell,
+                                          dir_ip = m.dir_ip,
+                                          fecha_hora = (DateTime)m.fecha,
+                                          img_verif = null,
+                                          registro = 0,
+
+                                      }).ToList();
+                }
+                
+            }
+
+            if (marcasEmpleado is not null)
+            {
+                listMarcas = (from m in marcasEmpleado 
+                              select new MarcaExt
+                              {
+                                  registro = m.registro,
+                                  idplanilla = m.idplanilla,
+                                  idnumero = m.idnumero,
+                                  fecha = m.fecha,
+                                  hora = m.hora,
+                                  tipo = m.tipo,
+                                  idterminal = m.idterminal,
+                                  estado = m.estado,
+                                  fecha_reg = m.fecha_reg,
+                                  long_reg = m.long_reg,
+                                  lat_reg = m.lat_reg,
+                                  imagen_reg = m.imagen_reg,
+                                  gps_cell = m.gps_cell,
+                                  img_verif = m.img_verif,
+                                  fecha_hora = m.fecha_hora,
+                                  dir_ip = m.dir_ip,
+                                  TipoMarca = Utiles.GetTipoMarca(m.tipo),
+                                  FechaMarca = DateOnly.FromDateTime(m.fecha),
+
+                              }).OrderByDescending(e => e.fecha_hora)
+                          .ToList();
+            }
+
+
+
+        }
+        catch (Exception e)
+        {
+            await swal.FireAsync("Error", "Error al cargar las marcas", SweetAlertIcon.Info);
+        }
+
+        InProcess = false;
+        StateHasChanged();
+        return listMarcas ;
+    }
+
+
+    private async void RegistrarMarca(int tipoMarca)
+    {
+        try
+        {
+            if (portal_Config!.USARGEOLOCALIZACION && portal_Config!.LOCALIZACIONREQ && latitud==0 && longitud == 0)
+            {
+                await swal.FireAsync("Error", "La geolocalización es requerida, actualmente el sistema no puede determinar la ubicación y por tanto no se puede realizar la marca. Por favor verifique que haya dado los permisos correspondientes al sitio web.", SweetAlertIcon.Error);
+                return;
+            }
+
+            if (portal_Config!.USARECONOCIMIENTOFACIAL)
+            {
+                TipoMarcaGlobal = tipoMarca;
+                await IniciarReconocimiento();
+            }
+            else
+                await GuardarMarca(tipoMarca);
+
+        }
+        catch (Exception e)
+        {
+            await swal.FireAsync("Error", "Error guardar el registro de marca", SweetAlertIcon.Error);
+        }
+
+    }
+
+    private TimeZoneInfo GetTimeZoneByOffset(int offsetHours)
+    {
+        var allZones = TimeZoneInfo.GetSystemTimeZones();
+        return allZones.FirstOrDefault(z =>z.BaseUtcOffset.Hours == offsetHours)!; 
+    }
+
+    private async Task GuardarMarca(int tipoMarca)
+    {
+        List<cMarcaIn> listMarcaIn = new();
+        var coords = coordenadas.Split("|");
+        string latitud = "";
+        string longitud = "";
+        MarcasDBLocal marcaDBLocal = new();
+
+        if (coords.Count() > 1)
+        {
+            latitud = coords[0];
+            longitud = coords[1];
+        }
+
+        var tz = GetTimeZoneByOffset(loginState.TimeZone);
+
+        string zonaHorariaSeleccionada = tz.Id;
+        string horaMarcaZH = "";
+        if (!string.IsNullOrEmpty(zonaHorariaSeleccionada))
+        {
+            var utcNow = DateTime.UtcNow;
+            var zona = TimeZoneInfo.FindSystemTimeZoneById(zonaHorariaSeleccionada);
+            var horaLocal = TimeZoneInfo.ConvertTimeFromUtc(utcNow, zona);
+            horaMarcaZH = horaLocal.ToString("HH:mm");
+        }
+        else
+        {
+            horaMarcaZH = DateTime.Now.ToString("HH:mm");
+        }
+
+
+        cMarcaIn marcaIn = new cMarcaIn
+        {
+            idtarjeta = empleado.Tarjeta,
+            fecha = DateTime.Parse(DateTime.Now.ToString("yyyy-MM-dd")),
+            hora = horaMarcaZH,
+            idterminal = "WPE",
+            tipo = tipoMarca,
+            idplanilla = empleado.IdPlanilla,
+            idnumero = empleado.IdNumero,
+            estado = 'N',
+            fecha_reg = DateTime.Now,
+            long_reg = longitud,
+            lat_reg = latitud,
+            imagen_reg = null,
+            gps_cell = null,
+            host = dirIp,
+            dir_ip = dirIp,
+        };
+        listMarcaIn.Add(marcaIn);
+
+        
+
+        if (sincronizar)
+        {
+            var respuesta = await geoConnect.Post("MarcaIn", listMarcaIn);
+            if (respuesta.Id == "0")
+            {
+                await swal.FireAsync("Felicidades", $"La marca de {Utiles.GetTipoMarca(tipoMarca)} se realizó con exito", SweetAlertIcon.Success);
+                await ActualizarMarcar();
+            }
+            else
+            {
+                sincronizar = false;
+                await swal.FireAsync("Error", respuesta.Descripcion, SweetAlertIcon.Error);
+            }
+        }
+        else
+        {
+            await swal.FireAsync("Atención", "Actualmente no existe conexión con la base de datos. La marca se guardará de forma local para su posterior sincronización.", SweetAlertIcon.Warning);
+        }
+
+        foreach (var marca in listMarcaIn)
+        {
+            marca.estado = sincronizar ? 'S' : 'N';
+            var resp = await marcaDBLocal.SaveMarcaInAsync(marca);
+
+        }
+
+    }
+
+    private async Task ActualizarMarcar()
+    {
+        marcas = await GetMarcas();
+    }
+
+    private async Task IniciarReconocimiento()
+    {
+        await dialogService.OpenAsync<MarcaPop>("Reconociendo el Rostro",
+             new Dictionary<string, object>()
+               {
+                    { "OnReconocimiento", EventCallback.Factory.Create<int>(this, HideModalRostro) },
+                    { "EmpleadoId", EmpleadoId! }
+               },
+             new DialogOptions()
+             {
+                 Resizable = false,
+                 Draggable = false,
+                 Width = "310px",
+                 Height = "400px",
+             });
+
+    }
+
+    private async Task HideModalRostro(int EsReconocido)
+    {
+        dialogService.Close(true);
+
+        switch (EsReconocido)
+        {
+            case 0:
+                await swal.FireAsync("Error", "No fue posible reconocer su rostro. La marca no se ha realizado.  Intente nuevamente acercando su rostro más hacia la cámara.", SweetAlertIcon.Error);
+                break;
+            case 1:
+                await GuardarMarca(TipoMarcaGlobal);
+                break;
+            case 2:
+                await swal.FireAsync("Error", "Su rostro no ha sido registrado en la base de datos. Por favor contacte al administrador.", SweetAlertIcon.Error);
+                break;
+        }
+
+    }
+
+    private async Task OnCameraChanged(object value)
+    {
+        selectedCameraId = value?.ToString() ?? "";
+        await JsRuntime.InvokeVoidAsync("setPreferredCamera", selectedCameraId);
+    }
+
+    async Task FilterCleared()
+    {
+
+    }
+
+    void OnRender(DataGridRenderEventArgs<MarcaExt> args)
+    {
+        if (args.FirstRender)
+        {
+            args.Grid!.Sorts.Add(new SortDescriptor() { Property = "fecha", SortOrder = SortOrder.Ascending });
+
+        }
+    }
+
+    void RowRender(RowRenderEventArgs<MarcaExt> args)
+    {
+    }
+    void OnPage(PagerEventArgs args)
+    {
+    }
+
+    void OnColumnReordering(DataGridColumnReorderingEventArgs<MarcaExt> args)
+    {
+        if (args.ToColumn.Property == nameof(MarcaExt.fecha))
+        {
+            args.Cancel = true;
+        }
+    }
+
+    private async Task<Location?> GetLocationAsync()
+    {
+        var status = await Permissions.CheckStatusAsync<Permissions.LocationWhenInUse>();
+        if (status != PermissionStatus.Granted)
+            status = await Permissions.RequestAsync<Permissions.LocationWhenInUse>();
+
+        if (status != PermissionStatus.Granted)
+            return null; // permiso denegado
+
+        try
+        {
+            var request = new GeolocationRequest(GeolocationAccuracy.Best, TimeSpan.FromSeconds(10));
+            var location = await Geolocation.Default.GetLocationAsync(request);
+            return location;
+        }
+        catch (Exception ex)
+        {
+            // manejar Timeouts, falta de GPS, etc.
+            return null;
+        }
+    }
+
+    private async Task VerFaceLogs()
+    {
+        await dialogService.OpenAsync<FaceLogsPop>("Historial de Reconocimientos",
+             new Dictionary<string, object>(),
+             new DialogOptions()
+             {
+                 Resizable = true,
+                 Draggable = true,
+                 Width = "700px",
+                 Height = "500px",
+             });
+    }
+
+}

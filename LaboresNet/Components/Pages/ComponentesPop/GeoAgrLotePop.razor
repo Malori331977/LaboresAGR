@@ -1,0 +1,45 @@
+<RadzenDataGrid TItem="GeoAgrLote" Data="@lotes"
+                AllowFiltering="true" AllowPaging="true" PageSize="10"
+                AllowSorting="true" FilterMode="FilterMode.SimpleWithMenu"
+                FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive"
+                RowClick="@OnSelect"
+                Style="width:100%;">
+    <Columns>
+        <RadzenDataGridColumn TItem="GeoAgrLote" Property="Lote" Title="Lote">
+            <Template Context="item">
+                <div style="display:flex;gap:8px;align-items:flex-start;padding:2px 0;">
+                    <div class="emp-avatar" style="width:36px;height:36px;font-size:0.85rem;flex-shrink:0;">
+                        @(string.IsNullOrEmpty(item.Lote) ? "?" : item.Lote.Substring(0, 1).ToUpper())
+                    </div>
+                    <div style="flex:1;min-width:0;">
+                        <div style="font-weight:600;font-size:0.85rem;color:#212121;line-height:1.3;">@item.Lote</div>
+                        @if (!string.IsNullOrEmpty(item.TipoSuelo))
+                        {
+                            <div class="emp-meta-row">
+                                <RadzenIcon Icon="terrain" Style="font-size:0.78rem;color:#bbb;flex-shrink:0;" />
+                                @item.TipoSuelo
+                            </div>
+                        }
+                        @if (!string.IsNullOrEmpty(item.Variedad))
+                        {
+                            <div class="emp-meta-row">
+                                <RadzenIcon Icon="eco" Style="font-size:0.78rem;color:#bbb;flex-shrink:0;" />
+                                @item.Variedad
+                            </div>
+                        }
+                    </div>
+                </div>
+            </Template>
+        </RadzenDataGridColumn>
+    </Columns>
+</RadzenDataGrid>
+
+@code {
+    [Parameter] public EventCallback<GeoAgrLote> OnGeoAgrLoteSelected { get; set; }
+    [Parameter] public IEnumerable<GeoAgrLote>? lotes { get; set; }
+
+    void OnSelect(DataGridRowMouseEventArgs<GeoAgrLote> args)
+    {
+        OnGeoAgrLoteSelected.InvokeAsync(args.Data);
+    }
+}

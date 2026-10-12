@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Plantilla de las contraseñas de firma Android.
+  Copiar a "AndroidSigning.local.props" (ignorado por git) y reemplazar los valores.
+  El archivo real NO debe versionarse.
+-->
+<Project>
+  <PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Debug|net10.0-android|AnyCPU'">
+    <AndroidSigningKeyPass>CAMBIAR</AndroidSigningKeyPass>
+    <AndroidSigningStorePass>CAMBIAR</AndroidSigningStorePass>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Release|net10.0-android|AnyCPU'">
+    <AndroidSigningKeyPass>CAMBIAR</AndroidSigningKeyPass>
+    <AndroidSigningStorePass>CAMBIAR</AndroidSigningStorePass>
+  </PropertyGroup>
+</Project>

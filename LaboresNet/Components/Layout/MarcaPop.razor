@@ -1,0 +1,252 @@
+﻿@using System;
+@using System.Net;
+@using System.Text;
+@using Microsoft.Maui.ApplicationModel;
+@using PortalEmpleadoGeotime.Client.Data.DataBaseLocal
+
+<div class="camera-selector-container" style="margin-bottom: 1rem; padding: 0.5rem;">
+    @if (Cameras is not null && Cameras.Count > 0)
+    {
+        <RadzenStack Orientation="Radzen.Orientation.Horizontal" JustifyContent="JustifyContent.SpaceBetween" AlignItems="Radzen.AlignItems.Center" Gap="0.5rem">
+            <RadzenText TextStyle="TextStyle.Caption">Seleccionar Cámara:</RadzenText>
+            <RadzenDropDown @bind-Value="SelectedCameraId" 
+                           Data="@Cameras" 
+                           TextProperty="Label" 
+                           ValueProperty="DeviceId"
+                           Change="@OnCameraChanged"
+                           style="width: 200px;">
+            </RadzenDropDown>
+        </RadzenStack>
+    }
+</div>
+
+<RadzenStack Orientation="Radzen.Orientation.Horizontal" JustifyContent="JustifyContent.Center" AlignItems="Radzen.AlignItems.Center" Gap="1rem">
+    <div class="container-canvas">
+        <video id="video" autoplay muted></video>
+        <canvas id="overlay"></canvas>
+    </div>
+</RadzenStack>
+@* <div class="row">
+
+    <div class="col ml-10">
+        <div class="container-canvas">
+            <video id="video" autoplay muted></video>
+            <canvas id="overlay"></canvas>
+        </div>
+    </div>
+</div> *@
+@if (InProcessRec)
+{
+    <div class="text-center">
+        <SpinnerControl></SpinnerControl> <br />Procesando Rostro
+    </div>
+}
+
+
+@code {
+
+    [Parameter] public EventCallback<int> OnReconocimiento { get; set; }
+    [Parameter] public string? EmpleadoId { get; set; } = null;
+
+    private bool InProcessRec = false;
+    private bool CamaraEncendida = false;
+    private List<string> descriptores = new();
+    private List<CameraDevice> Cameras = new();
+    private string? SelectedCameraId = null;
+
+    private class CameraDevice
+    {
+        public string DeviceId { get; set; } = string.Empty;
+        public string Label { get; set; } = string.Empty;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        EmpleadoId = EmpleadoId ?? loginState.Empleado.IdNumero!;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                // Cargar lista de cámaras disponibles
+                await LoadAvailableCameras();
+                await OnIniciarCamara();
+                await OnVerificarRostroColaborador();
+            }
+            catch (Exception e)
+            {
+                await swal.FireAsync("Atención", $"Se ha presentado un error al iniciar la cámara. Detalle de error: {(e.InnerException == null ? e.Message : e.InnerException)}", SweetAlertIcon.Error);
+            }
+        }
+    }
+
+    private async Task LoadAvailableCameras()
+    {
+        try
+        {
+            var camerasJson = await JsRuntime.InvokeAsync<string>("getCameras");
+            if (!string.IsNullOrEmpty(camerasJson))
+            {
+                var cameraList = System.Text.Json.JsonSerializer.Deserialize<List<CameraDevice>>(camerasJson);
+                if (cameraList is not null)
+                {
+                    Cameras = cameraList;
+                    if (Cameras.Count > 0)
+                    {
+                        SelectedCameraId = Cameras[0].DeviceId;
+                    }
+                    StateHasChanged();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading cameras: {ex.Message}");
+        }
+    }
+
+    private async Task OnCameraChanged(object value)
+    {
+        if (value is not null && CamaraEncendida)
+        {
+            try
+            {
+                // Establecer la cámara preferida
+                await JsRuntime.InvokeVoidAsync("setPreferredCamera", SelectedCameraId);
+                // Reiniciar la cámara con el nuevo dispositivo
+                await OnApagarCamara();
+                await Task.Delay(500);
+                await OnIniciarCamara();
+            }
+            catch (Exception ex)
+            {
+                await swal.FireAsync("Error", $"Error al cambiar la cámara: {ex.Message}", SweetAlertIcon.Error);
+            }
+        }
+    }
+
+    private async Task OnVerificarRostroColaborador()
+    {
+        InProcessRec = true;
+        StateHasChanged();
+        int caraReconocida = 0;
+        try
+        {
+            List<string> colaboradorReconocido = new List<string>();
+            var caraDetectada = await JsRuntime.InvokeAsync<int>("verifyFace");
+
+            if (caraDetectada == 1)
+            {
+                IEnumerable<cTemplateFACE> colaboradorFaces = new List<cTemplateFACE>();
+                bool sincronizar = await geoConnect.ApiDisponible();
+
+                if (sincronizar)
+                    colaboradorFaces = await geoConnect.GetTemplateFACE(EmpleadoId!);
+                else
+                {
+                    MarcasDBLocal laborDBLocal = new();
+                    colaboradorFaces = await laborDBLocal.GetTemplateFACEAsync(EmpleadoId!);
+                }
+                        
+
+                if (colaboradorFaces is not null)
+                {
+                    descriptores.Clear();
+                    foreach (var face in colaboradorFaces)
+                    {
+                        var descriptor = Encoding.ASCII.GetString(face.FACETEMPLATE);
+                        descriptores.Add(descriptor);
+                    }
+
+                    if (descriptores.Count() > 0)
+                    {
+                        foreach (var descriptor in descriptores)
+                        {
+                            await JsRuntime.InvokeAsync<bool>("idbSet", "idnum", EmpleadoId!);
+                            await JsRuntime.InvokeAsync<bool>("idbSet", "faceVerify", descriptor);
+                            caraReconocida = await JsRuntime.InvokeAsync<int>("compareFace");
+
+                            if (caraReconocida == 1)
+                            {
+                                colaboradorReconocido.Add(descriptor);
+                                if (colaboradorReconocido.Count() > 2)
+                                {
+                                    break;
+                                }
+                            }
+                            
+                        }
+
+                        if (colaboradorReconocido.Count() > 2)
+                            await HideModalRostro(1);
+                        else
+							await HideModalRostro(0);
+
+                    }
+                    else
+                    {
+                        await HideModalRostro(2);
+                    }
+                }
+                else
+                {
+                    await HideModalRostro(2);
+                }
+            }
+            else
+            {
+                await HideModalRostro(0);
+            }
+
+
+        }
+        catch (Exception e)
+        {
+            await swal.FireAsync("Atención", $"Se ha presentado un error al procesar el rostro.  Detalle de error: {(e.InnerException == null ? e.Message : e.InnerException)}", SweetAlertIcon.Error);
+        }
+        InProcessRec = false;
+        StateHasChanged();
+    }
+
+    private async Task HideModalRostro(int EsReconocido)
+    {
+        await OnApagarCamara();
+        await OnReconocimiento.InvokeAsync(EsReconocido);
+        
+    }
+
+    private async Task OnIniciarCamara()
+    {
+        var camStatus = await Permissions.CheckStatusAsync<Permissions.Camera>();
+        if (camStatus != PermissionStatus.Granted)
+            camStatus = await Permissions.RequestAsync<Permissions.Camera>();
+
+        var micStatus = await Permissions.CheckStatusAsync<Permissions.Microphone>();
+        if (micStatus != PermissionStatus.Granted)
+            micStatus = await Permissions.RequestAsync<Permissions.Microphone>();
+
+        if (camStatus != PermissionStatus.Granted || micStatus != PermissionStatus.Granted)
+        {
+            await swal.FireAsync("Atención", $"No se ha concedido el permiso a esta aplicación para el uso de la cámara.", SweetAlertIcon.Error);
+            return;
+        }
+
+        // Establecer la cámara preferida si está disponible
+        if (!string.IsNullOrEmpty(SelectedCameraId))
+        {
+            await JsRuntime.InvokeVoidAsync("setPreferredCamera", SelectedCameraId);
+        }
+
+        CamaraEncendida = (await JsRuntime.InvokeAsync<int>("startMedia") == 1);
+    }
+
+    private async Task OnApagarCamara()
+    {
+        await JsRuntime.InvokeVoidAsync("stopMedia");
+
+    }
+}
+

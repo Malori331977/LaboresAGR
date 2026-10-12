@@ -1,0 +1,407 @@
+@page "/geoagrlaborauxiliaredicion"
+@using PortalEmpleadoGeotime.Client.Data.DataBaseLocal
+
+<div class="card">
+    <PageReturn Titulo="@Titulo" UrlRetorno="@UrlRetorno" />
+    <div class="card-body px-2 py-2">
+        @if (InProcess)
+        {
+            <SpinnerControl></SpinnerControl>
+        }
+
+        <div class="ibm-plex-serif-bold">
+
+            @* ══ Encabezado ══ *@
+            <RadzenPanel AllowCollapse="true" class="panel-brand" Style="margin-bottom:0.5rem;">
+                <HeaderTemplate>
+                    <RadzenIcon Icon="event" class="me-1" /> Datos del Avance
+                </HeaderTemplate>
+                <ChildContent>
+                    <div style="display:flex;flex-direction:column;gap:8px;">
+                        <label class="lbl-xs" style="display:flex; align-items:end; gap:10px;">
+                            <div style="display:flex; flex-direction:column; gap:3px;">
+                                <span>Registro No.</span>
+                                <div class="form-control br8" style="background:#f0f7ff;">@idRegistroActual</div>
+                            </div>
+                            <span class="emp-status-badge enrolled">
+                                <RadzenIcon Icon="task_alt" Style="font-size:0.78rem;" />@encabezado.Estado
+                            </span>
+                        </label>
+                        <label class="lbl-xs" style="display:flex;flex-direction:column;gap:3px;">
+                            Fecha
+                            <div class="form-control br8" style="background:#f0f7ff;">@encabezado.Fecha.ToString("dd/MM/yyyy")</div>
+                        </label>
+                        <label class="lbl-xs" style="display:flex;flex-direction:column;gap:3px;">
+                            Empleado responsable
+                            <div class="form-control br8" style="background:#f0f7ff;">@encabezado.NombreEmpleado</div>
+                        </label>
+                        <label class="lbl-xs" style="display:flex;flex-direction:column;gap:3px;">
+                            Comentarios
+                            <div class="form-control br8" style="background:#f0f7ff;min-height:38px;">@encabezado.Comentarios</div>
+                        </label>
+                    </div>
+                </ChildContent>
+            </RadzenPanel>
+
+            @* ══ Ítems asignados ══ *@
+            <RadzenPanel AllowCollapse="true" class="panel-brand" Style="margin-bottom:0.5rem;">
+                <HeaderTemplate>
+                    <RadzenIcon Icon="agriculture" class="me-1" /> Ítems asignados
+                    @if (items.Count > 0)
+                    {
+                        <span style="margin-left:6px;display:inline-flex;align-items:center;gap:3px;
+                                     padding:1px 8px;border-radius:12px;
+                                     background:#EBF5FC;font-size:0.68rem;font-weight:600;color:#1a76cb;">
+                            @items.Count @(items.Count == 1 ? "ítem" : "ítems")
+                        </span>
+                    }
+                </HeaderTemplate>
+                <ChildContent>
+                    @if (items.Count > 0)
+                    {
+                        @foreach (var item in items)
+                        {
+                            <div style="background:#fff;border:1px solid #deeef6;border-radius:10px;
+                                        border-top:3px solid #1a76cb;padding:12px;margin-bottom:8px;">
+                                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                                    <span style="display:inline-flex;align-items:center;gap:4px;padding:2px 10px;border-radius:12px;
+                                                 background:#EBF5FC;font-size:0.72rem;font-weight:700;color:#1a76cb;">
+                                        <RadzenIcon Icon="agriculture" Style="font-size:0.78rem;" />Ítem @item.Item
+                                    </span>
+                                </div>
+
+                                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+                                    <label class="lbl-xs" style="display:flex;flex-direction:column;gap:3px;">
+                                        Bloque/Finca
+                                        <div class="form-control br8" style="background:#f0f7ff;font-size:0.8rem;">@item.Bloque / @item.Finca</div>
+                                    </label>
+                                    <label class="lbl-xs" style="display:flex;flex-direction:column;gap:3px;">
+                                        Lote
+                                        <div class="form-control br8" style="background:#f0f7ff;font-size:0.8rem;">@item.Lote</div>
+                                    </label>
+                                    <label class="lbl-xs" style="display:flex;flex-direction:column;gap:3px;">
+                                        OT
+                                        <div class="form-control br8" style="background:#f0f7ff;font-size:0.8rem;">@item.Ot - @item.NombreOt</div>
+                                    </label>
+                                    <label class="lbl-xs" style="display:flex;flex-direction:column;gap:3px;">
+                                        Labor
+                                        <div class="form-control br8" style="background:#f0f7ff;font-size:0.8rem;">@item.Labor - @item.NombreLabor</div>
+                                    </label>
+                                    <label class="lbl-xs" style="display:flex;flex-direction:column;gap:3px;">
+                                        Recurso
+                                        <div class="form-control br8" style="background:#f0f7ff;font-size:0.8rem;">@item.Recurso - @item.NombreRecurso</div>
+                                    </label>
+                                    <label class="lbl-xs" style="display:flex;flex-direction:column;gap:3px;">
+                                        Unidad
+                                        <div class="form-control br8" style="background:#f0f7ff;font-size:0.8rem;">@item.Unidad</div>
+                                    </label>
+                                </div>
+
+                                @foreach (var emp in item.Empleados)
+                                {
+                                    <div style="display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-top:1px solid #f0f0f0;">
+                                        <div class="emp-avatar" style="width:36px;height:36px;font-size:0.85rem;flex-shrink:0;">
+                                            @(string.IsNullOrEmpty(emp.NombreEmpleado) ? "?" : emp.NombreEmpleado.Substring(0,1).ToUpper())
+                                        </div>
+                                        <div style="flex:1;min-width:0;">
+                                            <div style="font-weight:700;font-size:0.85rem;color:#212121;line-height:1.3;">@emp.NombreEmpleado</div>
+                                            <div style="font-size:0.7rem;color:#999;font-variant-numeric:tabular-nums;margin-bottom:6px;">@emp.IdEmpleadoAsignado</div>
+
+                                            <div style="display:flex;flex-direction:column;gap:6px;">
+                                                <label class="lbl-xs" style="display:flex;flex-direction:column;gap:3px;">
+                                                    Asignada
+                                                    <RadzenNumeric TValue="decimal?"
+                                                                   @bind-Value="emp.CantidadAsignada"
+                                                                   Placeholder="0.00"
+                                                                   Format="n2"
+                                                                   Disabled="@(!emp.Editable)"
+                                                                   Style="font-size:small;width:100%;" />
+                                                </label>
+                                                <label class="lbl-xs" style="display:flex;flex-direction:column;gap:3px;">
+                                                    Aprobada
+                                                    <div class="form-control br8" style="background:#f0f7ff;font-size:0.8rem;">@(emp.CantidadAprobada?.ToString("n2") ?? "0.00")</div>
+                                                </label>
+                                                <label class="lbl-xs" style="display:flex;flex-direction:column;gap:3px;">
+                                                    Estado
+                                                    <span class="emp-status-badge" style="align-self:flex-start;@GetEstadoBadgeStyle(emp.EstadoId)">
+                                                        <RadzenIcon Icon="@GetEstadoIcon(emp.EstadoId)" Style="font-size:0.78rem;" />@emp.EstadoDescripcion
+                                                    </span>
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+
+                                <RadzenButton Icon="save"
+                                              Text="@($"Guardar cambios del ítem {item.Item}")"
+                                              ButtonStyle="ButtonStyle.Primary"
+                                              Size="ButtonSize.Medium"
+                                              Disabled="@(!item.Empleados.Any(e => e.Editable))"
+                                              Style="width:100%;touch-action:manipulation;margin-top:10px;"
+                                              Click="@(() => GuardarItem(item))" />
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <div style="text-align:center;padding:24px 0;color:#bbb;">
+                            <RadzenIcon Icon="agriculture" Style="font-size:2.5rem;display:block;margin:0 auto 8px;color:#ccc;" />
+                            <div style="font-size:0.85rem;color:#999;">No hay ítems registrados.</div>
+                        </div>
+                    }
+                </ChildContent>
+            </RadzenPanel>
+
+        </div>
+    </div>
+</div>
+
+@code {
+
+    [SupplyParameterFromQuery] public string? compania    { get; set; }
+    [SupplyParameterFromQuery] public string? idEmpleado  { get; set; }
+    [SupplyParameterFromQuery] public string? fecha       { get; set; }
+    [SupplyParameterFromQuery] public long?   idregistro  { get; set; }
+
+    private long idRegistroActual = 0;
+    private string Titulo     = "Registro de Avances";
+    private string UrlRetorno = "./geoagrlaborauxiliarlist";
+    bool InProcess = true;
+
+    private EncabezadoVM encabezado = new();
+    private List<GeoAgrLaborAuxiliarItemVM> items = new();
+
+    MarcasDBLocal marcaDBLocal = new();
+
+    public class EncabezadoVM
+    {
+        public DateTime Fecha { get; set; }
+        public string? NombreEmpleado { get; set; }
+        public string? Comentarios { get; set; }
+        public string Estado { get; set; } = "";
+    }
+
+    public class GeoAgrLaborAuxiliarItemVM
+    {
+        public int Item { get; set; }
+        public string? Bloque { get; set; }
+        public string? Finca { get; set; }
+        public string? Lote { get; set; }
+        public string? Ot { get; set; }
+        public string NombreOt { get; set; } = "";
+        public string? Labor { get; set; }
+        public string NombreLabor { get; set; } = "";
+        public string? Recurso { get; set; }
+        public string NombreRecurso { get; set; } = "";
+        public string? Unidad { get; set; }
+        public List<GeoAgrLaborAuxiliarEmpleadoVM> Empleados { get; set; } = new();
+    }
+
+    public class GeoAgrLaborAuxiliarEmpleadoVM
+    {
+        public string IdEmpleadoAsignado { get; set; } = "";
+        public string NombreEmpleado { get; set; } = "";
+        public decimal? CantidadAsignada { get; set; } // editable → CantidadRendimiento
+        public decimal? CantidadAprobada { get; set; } // solo lectura → HorasAprobadas
+        public int EstadoId { get; set; }
+        public string EstadoDescripcion { get; set; } = "";
+
+        /// <summary>
+        /// La cantidad asignada solo se puede editar mientras el detalle está en un estado
+        /// modificable: 0 (En proceso de Registro), 1 (En Proceso de Autorización) o 101 (Rechazada).
+        /// En cualquier otro estado el campo queda bloqueado.
+        /// </summary>
+        public bool Editable => EstadoId is 0 or 1 or 101;
+    }
+
+    private static string GetEstadoBadgeStyle(int estadoId) => estadoId switch
+    {
+        0   => "background:#e0f4fb;color:#0288d1;border-color:#b3e5fc;",  // celeste
+        1   => "background:#e8f5e9;color:#2e7d32;border-color:#a5d6a7;",  // verde
+        2   => "background:#fff3e0;color:#e65100;border-color:#ffcc80;",  // anaranjado
+        99  => "background:#EBF5FC;color:#1a76cb;border-color:#90caf9;",  // azul
+        100 => "background:#ffebee;color:#b71c1c;border-color:#ef9a9a;",  // rojo
+        101 => "background:#fce4ec;color:#880e4f;border-color:#f48fb1;",  // rojo oscuro/carmín
+        _   => "background:#f0f7ff;color:#616161;border-color:#deeef6;",  // gris por defecto
+    };
+
+    private static string GetEstadoIcon(int estadoId) => estadoId switch
+    {
+        0   => "radio_button_unchecked",
+        1   => "pending",
+        2   => "check_circle",
+        99  => "verified",
+        100 => "cancel",
+        101 => "do_not_disturb_on",
+        _   => "help_outline",
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            idRegistroActual = idregistro ?? 0;
+            var fechaDT = DateTime.ParseExact(fecha!, "yyyyMMdd", null);
+
+            var tHeader    = marcaDBLocal.GetGeoAgrLaborAuxiliarAsync(compania!, idEmpleado!, fechaDT, idRegistroActual);
+            var tDets      = marcaDBLocal.GetGeoAgrLaborAuxiliarDetAsync(compania!, idEmpleado!, fechaDT, idRegistroActual);
+            var tEmpleados = marcaDBLocal.GetEmpleadoAsync();
+            var tEstados   = marcaDBLocal.GetEstadoAsync();
+            var tOts       = marcaDBLocal.GetGeoAgrOtAsync(loginState.CompaniaSeleccionada);
+            var tOtLabores = marcaDBLocal.GetGeoAgrOtLaborAsync(loginState.CompaniaSeleccionada);
+            var tRecursos  = marcaDBLocal.GetGeoAgrRecursoConceptoAsync(loginState.CompaniaSeleccionada);
+
+            await Task.WhenAll(tHeader, tDets, tEmpleados, tEstados, tOts, tOtLabores, tRecursos);
+
+            var nombresPorId = (tEmpleados.Result ?? Enumerable.Empty<cEmpleado>())
+                .Where(e => !string.IsNullOrEmpty(e.IdNumero))
+                .ToDictionary(e => e.IdNumero!, e => e.Nombre ?? "");
+
+            var estadosPorId = (tEstados.Result ?? Enumerable.Empty<cEstado>())
+                .ToDictionary(e => e.Id, e => e.Descripcion);
+
+            if (tHeader.Result is not null)
+            {
+                encabezado.Fecha = tHeader.Result.Fecha;
+                encabezado.Comentarios = tHeader.Result.Comentarios;
+                encabezado.Estado = estadosPorId.TryGetValue(tHeader.Result.EstadoId, out var estHeader) ? estHeader : "Desconocido";
+                encabezado.NombreEmpleado = nombresPorId.TryGetValue(idEmpleado ?? "", out var nombreResp) ? nombreResp : idEmpleado ?? "";
+            }
+
+            if (tDets.Result is not null)
+            {
+                items = tDets.Result
+                    .GroupBy(d => d.Item)
+                    .OrderBy(g => g.Key)
+                    .Select(g =>
+                    {
+                        var primero = g.First();
+                        return new GeoAgrLaborAuxiliarItemVM
+                        {
+                            Item    = g.Key,
+                            Bloque  = primero.Bloque,
+                            Finca   = primero.Finca,
+                            Lote    = primero.Lote,
+                            Ot      = primero.Ot,
+                            NombreOt = tOts.Result?.FirstOrDefault(o => o.Ot == primero.Ot && o.Bloque == primero.Bloque && o.Finca == primero.Finca)?.NombreOt ?? "",
+                            Labor   = primero.Labor,
+                            NombreLabor = tOtLabores.Result?.FirstOrDefault(l => l.Labor == primero.Labor && l.Bloque == primero.Bloque && l.Finca == primero.Finca && l.Ot == primero.Ot)?.NombreLabor ?? "",
+                            Recurso = primero.Recurso,
+                            NombreRecurso = tRecursos.Result?.FirstOrDefault(r => r.Recurso == primero.Recurso)?.Descripcion ?? "",
+                            Unidad  = primero.Unidad,
+                            Empleados = g.Select(d => new GeoAgrLaborAuxiliarEmpleadoVM
+                            {
+                                IdEmpleadoAsignado = d.IdEmpleadoAsignado ?? "",
+                                NombreEmpleado = nombresPorId.TryGetValue(d.IdEmpleadoAsignado ?? "", out var nombreEmp) ? nombreEmp : d.IdEmpleadoAsignado ?? "",
+                                CantidadAsignada = d.CantidadRendimiento,
+                                CantidadAprobada = d.HorasAprobadas,
+                                EstadoId = d.EstadoId,
+                                EstadoDescripcion = estadosPorId.TryGetValue(d.EstadoId, out var estDet) ? estDet : "Desconocido",
+                            }).ToList(),
+                        };
+                    })
+                    .ToList();
+            }
+        }
+        catch (Exception ex)
+        {
+            await swal.FireAsync("Error", "Al inicializar el formulario: " + ex.Message, SweetAlertIcon.Error);
+        }
+        finally
+        {
+            InProcess = false;
+        }
+    }
+
+    private async Task GuardarItem(GeoAgrLaborAuxiliarItemVM itemVM)
+    {
+        InProcess = true;
+        try
+        {
+            // ── 1. Guardar los cambios del ítem en la base local ─────────────────
+            var cantidades = itemVM.Empleados.Select(e => (e.IdEmpleadoAsignado, e.CantidadAsignada));
+            await marcaDBLocal.UpdateGeoAgrLaborAuxiliarDetCantidadAsignadaAsync(idRegistroActual, itemVM.Item, cantidades);
+
+            // ── 2. Sincronizar con Geotime el registro completo (todos los ítems ya modificados) ──
+            await GuardarEnGeotime();
+
+            await swal.FireAsync("Atención", "Cambios guardados", SweetAlertIcon.Success);
+        }
+        catch (Exception ex)
+        {
+            await swal.FireAsync("Error", "Al guardar los cambios: " + ex.Message, SweetAlertIcon.Error);
+        }
+        finally
+        {
+            InProcess = false;
+        }
+    }
+
+    /// <summary>
+    /// Recarga el encabezado y TODOS los detalles ya modificados desde la base local y los
+    /// reenvía completos a Geotime, replicando el flujo de alta (GeoAgrLaborAuxiliarDetalle).
+    /// </summary>
+    private async Task GuardarEnGeotime()
+    {
+        try
+        {
+            var fechaDT = DateTime.ParseExact(fecha!, "yyyyMMdd", null);
+
+            // Encabezado + todos los detalles actuales (incluye los cambios recién guardados)
+            var header = await marcaDBLocal.GetGeoAgrLaborAuxiliarAsync(compania!, idEmpleado!, fechaDT, idRegistroActual);
+            if (header is null) return;
+
+            var listaDets = await marcaDBLocal.GetGeoAgrLaborAuxiliarDetAsync(compania!, idEmpleado!, fechaDT, idRegistroActual);
+            if (listaDets is null || listaDets.Count == 0) return;
+
+
+            var listaDetalle = listaDets.Select(d => new cSolicitudAuxLaborDet
+            {
+                SOLICITUDID          = 0, // Se asignará en Geotime
+                IDNUMERO             = d.IdEmpleadoAsignado!,
+                ITEM                 = d.Item,
+                BLOQUE               = d.Bloque!,
+                FINCA                = d.Finca!,
+                LOTE                 = d.Lote!,
+                OT                   = d.Ot!,
+                LABOR                = d.Labor!,
+                RECURSO              = d.Recurso!,
+                CANTIDAD_RENDIMIENTO = (decimal)d.CantidadRendimiento!,
+                UNIDAD               = d.Unidad!,
+                COMPANIA             = header.Compania!,
+                FECHA                = header.Fecha,
+                HORAS_APROBADAS      = d.HorasAprobadas ?? 0M,
+                ESTADOID             = d.EstadoId == 2 || d.EstadoId == 99 ? d.EstadoId : 1,
+            }).ToList();
+
+            var laborGT = new cSolicitudAuxLabor
+            {
+                ID                = 0, // Se asignará en Geotime
+                COMPANIA          = header.Compania!,
+                IDRESPONSABLE     = header.IdEmpleado!,
+                FECHA             = header.Fecha,
+                COMENTARIOS       = header.Comentarios,
+                ESTADOID          = 1, // En Proceso de Autorización
+                cSolicitudAuxLaborDet = listaDetalle,
+                FECHAREGISTRO     = DateTime.Now,
+                FECHAMODIFICA     = DateTime.Now,
+                IDREGISTROAPP     = idRegistroActual, // Para vincular con nuestro registro local
+                IDUSUARIOMODIFICA = loginState.Empleado.IdNumero!,
+                IDUSUARIOREGISTRA = loginState.Empleado.IdNumero!,
+            };
+
+            var response = await geoConnect.Post("SolicitudAuxLabor", new List<cSolicitudAuxLabor>() { laborGT });
+
+            if (response.Id == "0")
+            {
+                // Marcar el registro local como sincronizado
+                await marcaDBLocal.SaveGeoAgrLaborAuxiliarEstadoAsync(idRegistroActual, header.Compania!);
+            }
+        }
+        catch (Exception ex)
+        {
+            // No interrumpe el flujo principal, solo muestra una alerta
+            await swal.FireAsync("Error", "Al sincronizar con Geotime: " + ex.Message, SweetAlertIcon.Error);
+        }
+    }
+}

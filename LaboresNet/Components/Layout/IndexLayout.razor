@@ -1,0 +1,22 @@
+﻿@inherits LayoutComponentBase
+<RadzenComponents />
+<RadzenCard class="rz-mx-0" Style="width: 100%;height:100%">
+    
+    <RadzenCard class="rz-background-color-white rz-shadow-0 rz-border-radius-0 rz-p-0" style="margin: 1rem calc(-1 * var(--rz-card-padding));">
+        <main>
+            @Body
+        </main>
+    </RadzenCard>
+   @*  <RadzenFooter class="rz-background-color-dark">
+        <RadzenStack Orientation="Radzen.Orientation.Horizontal" JustifyContent="JustifyContent.Center" AlignItems="Radzen.AlignItems.Center" Gap="0" Style="height:20px">
+            <RadzenText TextStyle="TextStyle.Subtitle1" class="rz-display-flex rz-mt-2 rz-my-0 text-muted text-white">&copy; @DateTime.Now.Year - Powered by Geotime</RadzenText>
+        </RadzenStack>
+    </RadzenFooter>
+     *@
+</RadzenCard>
+
+
+
+@code {
+    
+}

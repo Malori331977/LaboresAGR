@@ -1,0 +1,47 @@
+﻿@using System.Net.Http
+@using System.Net.Http.Json
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.Components.Routing
+@using Microsoft.AspNetCore.Components.Web
+@using Microsoft.AspNetCore.Components.Web.Virtualization
+@using Microsoft.JSInterop
+@using System.Text.Json.Nodes;
+@using Microsoft.Extensions.Configuration
+
+@using LaboresNet
+@using LaboresNet.Components
+@using LaboresNet.Components.Layout
+@using LaboresNet.Components.Pages
+@using LaboresNet.Components.Pages.ComponentesPop
+@using LaboresNet.Components.Pages.Configuracion
+@using LaboresNet.Components.Pages.Procesos
+@using LaboresNet.Components.Pages.RelojMarcador
+@using LaboresNet.Data
+@using LaboresNet.Data.Interfaces
+
+@using CurrieTechnologies.Razor.SweetAlert2
+@using PortalEmpleadoGeotime.Client.Data
+@using Radzen
+@using Radzen.Blazor
+
+@using PortalEmpleadoGeotime.Client
+@using PortalEmpleadoGeotime.Client.Modelo
+@using PortalEmpleadoGeotime.Client.Data.Interfaces
+@using PortalEmpleadoGeotime.Client.Data.State
+@using PortalEmpleadoGeotime.Client.Modelo.Utils
+
+@using com.gsitcr.geotime.Models
+@using com.gsitcr.geotime.Models.Request
+@using com.gsitcr.geotime.Models.Response
+@using com.gsitcr.geotime.Models.Utils
+@using TicoFrutLibs.Models
+
+
+@inject IJSRuntime JsRuntime
+@inject NavigationManager NavigationManager
+@inject SweetAlertService swal
+@inject IGeoTimeConnect geoConnect
+@inject LoginState loginState
+@inject IGridExtensions gridExtensions  //agregar extension para pasar a español los filtros del grid
+@inject Radzen.DialogService dialogService
+@inject ITicoFrutConnect ticoFrutConnect

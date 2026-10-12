@@ -1,0 +1,388 @@
+@page "/geoagrlaborauxiliarlist"
+@using PortalEmpleadoGeotime.Client.Data.DataBaseLocal
+
+<div class="card">
+    <PageReturn Titulo="@Titulo" UrlRetorno="@UrlRetorno" />
+    <div class="card-body px-1 py-1">
+        @if (InProcess)
+        {
+            <SpinnerControl></SpinnerControl>
+        }
+        <div class="ibm-plex-serif-bold">
+            <RadzenPanel AllowCollapse="true" Collapsed="true" class="panel-brand" Style="margin-bottom:0.5rem;">
+                <HeaderTemplate>
+                    <RadzenIcon Icon="filter_alt" class="me-1" /> Filtrar por:
+                </HeaderTemplate>
+                <ChildContent>
+                    <EditForm Model="@parametros" OnValidSubmit="RefrescarDatos"
+                              style="display:flex;flex-direction:column;gap:8px;">
+                        <label class="lbl-xs" style="display:flex;flex-direction:column;gap:3px;">
+                            Fecha Desde
+                            <RadzenDatePicker TValue="DateOnly"
+                                              @bind-Value="parametros.FechaDesde"
+                                              DateFormat="dd/MM/yyyy"
+                                              Style="width:100%; font-size:small;" />
+                        </label>
+                        <label class="lbl-xs" style="display:flex;flex-direction:column;gap:3px;">
+                            Fecha Hasta
+                            <RadzenDatePicker TValue="DateOnly"
+                                              @bind-Value="parametros.FechaHasta"
+                                              DateFormat="dd/MM/yyyy"
+                                              Style="width:100%; font-size:small;" />
+                        </label>
+                        <RadzenButton ButtonType="ButtonType.Submit"
+                                      Icon="search"
+                                      Text="Buscar"
+                                      ButtonStyle="ButtonStyle.Secondary"
+                                      Size="ButtonSize.Large"
+                                      Style="width:100%;touch-action:manipulation;" />
+                    </EditForm>
+                </ChildContent>
+            </RadzenPanel>
+
+            <RadzenPanel AllowCollapse="true" class="panel-brand" Style="margin-bottom:0.5rem;">
+                <HeaderTemplate>
+                    <button class="btn btn-sm btn-success rounded-circle" @onclick="async () => await OnClickAdd()">
+                        <RadzenIcon Icon="agriculture" class="me-1" />
+                    </button>
+                    <button class="btn btn-sm btn-primary rounded-circle ms-1" @onclick="async () => await SincronizarDetalles()" title="Sincronizar estados y cantidades">
+                        <RadzenIcon Icon="sync" />
+                    </button>
+                    Labores Auxiliares
+                </HeaderTemplate>
+                <ChildContent>
+                    <RadzenDataGrid @ref="grid" Render="@OnRender" class="rz-border-radius-2"
+                                    PageSizeOptions="@Utiles.PageSizeOptions()"
+                                    TItem="GeoAgrLaborAuxiliarExt"
+                                    AllowFiltering="true"
+                                    AllowColumnResize="true"
+                                    FilterMode="FilterMode.SimpleWithMenu"
+                                    PageSize="10"
+                                    AllowPaging="true"
+                                    AllowSorting="true"
+                                    AllowMultiColumnSorting="true"
+                                    ShowMultiColumnSortingIndex="true"
+                                    Data="@dataList"
+                                    ColumnWidth="300px"
+                                    FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive"
+                                    FilterCleared="@FilterCleared"
+                                    SelectionMode="DataGridSelectionMode.Single"
+                                    LogicalFilterOperator="LogicalFilterOperator.Or"
+                                    FilterPopupRenderMode="PopupRenderMode.OnDemand"
+                                    AllowColumnPicking="false"
+                                    AllowColumnReorder="true"
+                                    RowRender="@RowRender"
+                                    PagerHorizontalAlign="HorizontalAlign.Center"
+                                    ShowPagingSummary="@showPagerSummary"
+                                    Page="@OnPage"
+                                    ColumnReordering="@OnColumnReordering">
+
+                        <PagingSummaryTemplate>
+                            <RadzenIcon Icon="database" Style="color: var(--rz-primary); font-size: var(--rz-pager-summary-font-size);" />
+                            Mostrando pagina @context.CurrentPage De @context.NumberOfPages <b>(Total @context.TotalCount records)</b>
+                        </PagingSummaryTemplate>
+                        <Columns>
+                            <RadzenDataGridColumn TItem="GeoAgrLaborAuxiliarExt" Property="Filtro" Title="Labor Auxiliar" Width="180px">
+                                <Template Context="labor">
+                                    <div style="display:flex;gap:10px;align-items:flex-start;padding:4px 0;">
+                                        @* ── Calendario visual ── *@
+                                        <div style="width:44px;height:44px;border-radius:10px;
+                                                    background:#EBF5FC;border:1px solid #deeef6;
+                                                    display:flex;flex-direction:column;align-items:center;
+                                                    justify-content:center;flex-shrink:0;">
+                                            <span style="font-size:0.58rem;font-weight:700;color:#1a76cb;
+                                                         text-transform:uppercase;line-height:1.2;">
+                                                @labor.Fecha.ToString("MMM", System.Globalization.CultureInfo.GetCultureInfo("es-CR"))
+                                            </span>
+                                            <span style="font-size:1.1rem;font-weight:700;color:#1a76cb;line-height:1.1;">
+                                                @labor.Fecha.Day
+                                            </span>
+                                        </div>
+                                        @* ── Datos ── *@
+                                        <div style="flex:1;min-width:0;">
+                                            <div style="font-weight:700;font-size:0.9rem;color:#212121;line-height:1.3;margin-bottom:1px;">
+                                                Labor #@labor.IdRegistro
+                                            </div>
+                                            <div style="font-size:0.7rem;color:#999;font-variant-numeric:tabular-nums;margin-bottom:5px;">
+                                                @labor.Fecha.ToString("dd/MM/yyyy")
+                                            </div>
+                                            @if (!string.IsNullOrEmpty(labor.Comentarios))
+                                            {
+                                                <div class="emp-meta-row" style="margin-bottom:5px;font-style:italic;">
+                                                    <RadzenIcon Icon="comment" Style="font-size:0.85rem;color:#bbb;flex-shrink:0;" />
+                                                    @labor.Comentarios
+                                                </div>
+                                            }
+                                            <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                                                <span style="display:inline-flex;align-items:center;gap:3px;
+                                                             padding:2px 8px;border-radius:12px;
+                                                             background:#EBF5FC;font-size:0.7rem;font-weight:600;color:#1a76cb;">
+                                                    <RadzenIcon Icon="agriculture" Style="font-size:0.8rem;" />
+                                                    @labor.CantDetalles actividades
+                                                </span>
+                                                <span style="display:inline-flex;align-items:center;gap:3px;
+                                                             padding:2px 8px;border-radius:12px;
+                                                             background:#EBF5FC;font-size:0.7rem;font-weight:600;color:#1a76cb;">
+                                                    <RadzenIcon Icon="group" Style="font-size:0.8rem;" />
+                                                    @labor.CantEmpleados empleados
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </Template>
+                            </RadzenDataGridColumn>
+                            <RadzenDataGridColumn TItem="GeoAgrLaborAuxiliarExt" Title="Acciones" Width="80px" Sortable="false" Filterable="false" TextAlign="TextAlign.Center">
+                                <Template Context="labor">
+                                    <RadzenStack Orientation="Radzen.Orientation.Vertical" Gap="0.3rem">
+                                        <RadzenButton Icon="edit" ButtonStyle="ButtonStyle.Success" Size="Radzen.ButtonSize.Medium"
+                                                      Click="@(() => OnClickEdit(labor))" />
+                                        <RadzenButton Icon="delete" ButtonStyle="ButtonStyle.Danger" Size="Radzen.ButtonSize.Medium"
+                                                      Click="@(() => OnDelete(labor))" />
+                                    </RadzenStack>
+                                </Template>
+                            </RadzenDataGridColumn>
+                        </Columns>
+                    </RadzenDataGrid>
+                </ChildContent>
+            </RadzenPanel>
+        </div>
+    </div>
+</div>
+
+@code {
+
+    RadzenDataGrid<GeoAgrLaborAuxiliarExt> grid = new();
+    private IEnumerable<GeoAgrLaborAuxiliarExt>? dataList;
+    bool showPagerSummary = true;
+    bool InProcess = true;
+    private ParametrosFiltro parametros = new();
+    private string Titulo = "Sistema de Labores";
+    string UrlRetorno = "./principal";
+    bool bInicializado = false;
+    bool bSincronizado = false;
+    MarcasDBLocal marcaDBLocal = new();
+
+    public class ParametrosFiltro
+    {
+        public DateOnly FechaDesde { get; set; } = DateOnly.FromDateTime(DateTime.Now.AddDays(-30));
+        public DateOnly FechaHasta { get; set; } = DateOnly.FromDateTime(DateTime.Now);
+    }
+
+    public class GeoAgrLaborAuxiliarExt : GeoAgrLaborAuxiliar
+    {
+        public long IdRegistro { get; set; }
+        public int CantDetalles { get; set; }
+        public int CantEmpleados { get; set; }
+        public string? Filtro { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await RefrescarDatos();
+    }
+
+    private async Task RefrescarDatos()
+    {
+        dataList = await GetListaItems();
+        
+        InProcess = false;
+        StateHasChanged();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            if (!bSincronizado) {
+                await SincronizarDetalles();
+                bSincronizado = true;
+            }
+        }
+    }
+
+    
+
+    private async Task<IEnumerable<GeoAgrLaborAuxiliarExt>> GetListaItems()
+    {
+        List<GeoAgrLaborAuxiliarExt> items = new();
+        InProcess = true;
+        try
+        {
+            var fechaDesde = parametros.FechaDesde.ToDateTime(TimeOnly.MinValue);
+            var fechaHasta = parametros.FechaHasta.ToDateTime(TimeOnly.MaxValue);
+
+            // Usar locales para obtener IdRegistro de cada encabezado
+            var registros = await marcaDBLocal.GetGeoAgrLaborAuxiliarLocalesAsync();
+
+            if (registros is not null)
+            {
+                var filtrados = registros
+                    .Where(r => r.IdEmpleado == loginState.Empleado.IdNumero
+                             && r.Fecha >= fechaDesde
+                             && r.Fecha <= fechaHasta);
+
+                foreach (var r in filtrados)
+                {
+                    var detalles = await marcaDBLocal.GetGeoAgrLaborAuxiliarDetAsync(r.Compania!, r.IdEmpleado!, r.Fecha, r.IdRegistro);
+
+                    items.Add(new GeoAgrLaborAuxiliarExt
+                    {
+                        IdRegistro   = r.IdRegistro,
+                        Compania     = r.Compania,
+                        IdEmpleado   = r.IdEmpleado,
+                        Fecha        = r.Fecha,
+                        Comentarios  = r.Comentarios,
+                        CantDetalles = detalles?.Select(d => d.Item).Distinct().Count() ?? 0,
+                        CantEmpleados = detalles?.Select(d => d.IdEmpleadoAsignado).Distinct().Count() ?? 0,
+                        Filtro = $"{r.IdRegistro} {r.Fecha:dd/MM/yyyy} {r.IdEmpleado} {r.Comentarios}"
+                    });
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            await swal.FireAsync("Error", "Al cargar las labores auxiliares: " + e.Message, SweetAlertIcon.Error);
+        }
+        InProcess = false;
+        StateHasChanged();
+        return items;
+    }
+
+    private async Task SincronizarDetalles()
+    {
+        if (!await geoConnect.ApiDisponible())
+        {
+            return;
+        }
+
+        try
+        {
+            var fechaDesde = parametros.FechaDesde.ToDateTime(TimeOnly.MinValue);
+            var fechaHasta = parametros.FechaHasta.ToDateTime(TimeOnly.MaxValue);
+
+            var solicitudAuxLaborTask = geoConnect.GetSolicitudAuxLaborByResponsable(
+                loginState.CompaniaSeleccionada,
+                loginState.Empleado.IdNumero!,
+                fechaDesde.ToString("yyyyMMdd"),
+                fechaHasta.ToString("yyyyMMdd"));
+            var laboresAuxiliaresTask = marcaDBLocal.GetGeoAgrLaborAuxiliarAsync(
+                loginState.CompaniaSeleccionada,
+                loginState.Empleado.IdNumero!,
+                fechaDesde,
+                fechaHasta);
+            var itemsLaborAuxiliarTask = marcaDBLocal.GetGeoAgrLaborAuxiliarDetAsync(
+                loginState.CompaniaSeleccionada,
+                loginState.Empleado.IdNumero!,
+                fechaDesde,
+                fechaHasta);
+
+            await Task.WhenAll(solicitudAuxLaborTask, laboresAuxiliaresTask, itemsLaborAuxiliarTask);
+
+            var solicitudesAuxLabor = await solicitudAuxLaborTask;
+            var laboresAuxiliares   = await laboresAuxiliaresTask;
+            var itemsLaborAuxiliar  = await itemsLaborAuxiliarTask;
+
+            if (solicitudesAuxLabor is not null && laboresAuxiliares is not null && itemsLaborAuxiliar is not null)
+            {
+                foreach (var solicitud in solicitudesAuxLabor)
+                {
+                    if (!laboresAuxiliares.Any(l => l.IdRegistro == solicitud.IDREGISTROAPP))
+                        continue;
+
+                    List<GeoAgrLaborAuxiliarDet> itemsActualizar = new();
+                    foreach (var itemDet in solicitud.cSolicitudAuxLaborDet!)
+                    {
+                        var local = itemsLaborAuxiliar.FirstOrDefault(i =>
+                            i.IdRegistro        == solicitud.IDREGISTROAPP
+                            && i.Item           == itemDet.ITEM
+                            && i.IdEmpleadoAsignado == itemDet.IDNUMERO
+                            && i.Fecha          == itemDet.FECHA);
+
+                        if (local is not null)
+                        {
+                            local.EstadoId             = itemDet.ESTADOID;
+                            local.CantidadRendimiento  = itemDet.CANTIDAD_RENDIMIENTO;
+                            local.HorasAprobadas       = itemDet.HORAS_APROBADAS;
+                            itemsActualizar.Add(local);
+                        }
+                    }
+
+                    if (itemsActualizar.Count > 0)
+                        await marcaDBLocal.SaveGeoAgrLaborAuxiliarDetAsync(itemsActualizar);
+                }
+            }
+        }
+        catch (Exception)
+        {
+     
+        }
+        
+    }
+
+    private async Task OnClickAdd()
+    {
+        NavigationManager.NavigateTo("./geoagrlaborauxiliardetalle");
+    }
+
+    private void OnClickEdit(GeoAgrLaborAuxiliarExt labor)
+    {
+        var fecha = labor.Fecha.ToString("yyyyMMdd");
+        NavigationManager.NavigateTo($"./geoagrlaborauxiliaredicion?compania={Uri.EscapeDataString(labor.Compania ?? "")}&idEmpleado={Uri.EscapeDataString(labor.IdEmpleado ?? "")}&fecha={fecha}&idregistro={labor.IdRegistro}");
+    }
+
+    private async Task OnDelete(GeoAgrLaborAuxiliarExt labor)
+    {
+        SweetAlertResult result = await swal.FireAsync(new SweetAlertOptions
+        {
+            Title = "Atención",
+            Text = "¿Desea realmente eliminar el registro seleccionado?",
+            Icon = SweetAlertIcon.Warning,
+            ShowCancelButton = true,
+            ConfirmButtonText = "Sí",
+            CancelButtonText = "No"
+        });
+
+        if (result.IsConfirmed)
+        {
+            InProcess = true;
+            try
+            {
+                await marcaDBLocal.DeleteGeoAgrLaborAuxiliarAsync(labor.IdRegistro);
+                dataList = await GetListaItems();
+                StateHasChanged();
+            }
+            catch (Exception e)
+            {
+                await swal.FireAsync("Error", "Al eliminar el registro: " + e.Message, SweetAlertIcon.Error);
+            }
+            finally
+            {
+                InProcess = false;
+            }
+        }
+    }
+
+    async Task FilterCleared()
+    {
+    }
+
+    void OnRender(DataGridRenderEventArgs<GeoAgrLaborAuxiliarExt> args)
+    {
+        if (args.FirstRender)
+        {
+            args.Grid!.Sorts.Add(new SortDescriptor() { Property = "Filtro", SortOrder = SortOrder.Descending });
+        }
+    }
+
+    void RowRender(RowRenderEventArgs<GeoAgrLaborAuxiliarExt> args)
+    {
+    }
+
+    void OnPage(PagerEventArgs args)
+    {
+    }
+
+    void OnColumnReordering(DataGridColumnReorderingEventArgs<GeoAgrLaborAuxiliarExt> args)
+    {
+    }
+}

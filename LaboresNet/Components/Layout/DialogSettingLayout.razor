@@ -1,0 +1,77 @@
+﻿@using System.Text.Json
+@code {
+    DialogSettings _settings;
+
+    public void OnDrag(System.Drawing.Point point)
+    {
+        JsRuntime.InvokeVoidAsync("eval", $"console.log('Dialog drag. Left:{point.X}, Top:{point.Y}')");
+
+        if (Settings == null)
+        {
+            Settings = new DialogSettings();
+        }
+
+        Settings.Left = $"{point.X}px";
+        Settings.Top = $"{point.Y}px";
+
+        InvokeAsync(SaveStateAsync);
+    }
+
+    public void OnResize(System.Drawing.Size size)
+    {
+        JsRuntime.InvokeVoidAsync("eval", $"console.log('Dialog resize. Width:{size.Width}, Height:{size.Height}')");
+
+        if (Settings == null)
+        {
+            Settings = new DialogSettings();
+        }
+
+        Settings.Width = $"{size.Width}px";
+        Settings.Height = $"{size.Height}px";
+
+        InvokeAsync(SaveStateAsync);
+    }
+
+    
+    public DialogSettings Settings
+    {
+        get
+        {
+            return _settings;
+        }
+        set
+        {
+            if (_settings != value)
+            {
+                _settings = value;
+                InvokeAsync(SaveStateAsync);
+            }
+        }
+    }
+
+    private async Task LoadStateAsync()
+    {
+        await Task.CompletedTask;
+
+        var result = await JsRuntime.InvokeAsync<string>("window.localStorage.getItem", "DialogSettings");
+        if (!string.IsNullOrEmpty(result))
+        {
+            _settings = JsonSerializer.Deserialize<DialogSettings>(result)!;
+        }
+    }
+
+    public async Task SaveStateAsync()
+    {
+        await Task.CompletedTask;
+
+        await JsRuntime.InvokeVoidAsync("window.localStorage.setItem", "DialogSettings", JsonSerializer.Serialize<DialogSettings>(Settings));
+    }
+
+    public class DialogSettings
+    {
+        public string Left { get; set; }
+        public string Top { get; set; }
+        public string Width { get; set; }
+        public string Height { get; set; }
+    }
+}

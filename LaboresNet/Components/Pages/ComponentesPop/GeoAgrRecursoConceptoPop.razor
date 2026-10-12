@@ -1,0 +1,52 @@
+<RadzenDataGrid TItem="GeoAgrRecursoConcepto" Data="@recursos"
+                AllowFiltering="true" AllowPaging="true" PageSize="10"
+                AllowSorting="true" FilterMode="FilterMode.SimpleWithMenu"
+                FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive"
+                RowClick="@OnSelect"
+                Style="width:100%;">
+    <Columns>
+        <RadzenDataGridColumn TItem="GeoAgrRecursoConcepto" Property="Descripcion" Title="Recurso / Concepto">
+            <Template Context="item">
+                <div style="display:flex;gap:8px;align-items:flex-start;padding:2px 0;">
+                    <div class="emp-avatar" style="width:36px;height:36px;font-size:0.85rem;flex-shrink:0;">
+                        @(string.IsNullOrEmpty(item.Descripcion) ? "?" : item.Descripcion.Substring(0, 1).ToUpper())
+                    </div>
+                    <div style="flex:1;min-width:0;">
+                        <div style="font-weight:600;font-size:0.85rem;color:#212121;line-height:1.3;">@item.Descripcion</div>
+                        @if (!string.IsNullOrEmpty(item.Recurso))
+                        {
+                            <div class="emp-meta-row">
+                                <RadzenIcon Icon="inventory_2" Style="font-size:0.78rem;color:#bbb;flex-shrink:0;" />
+                                @item.Recurso
+                            </div>
+                        }
+                        @if (!string.IsNullOrEmpty(item.ConceptoMo))
+                        {
+                            <div class="emp-meta-row">
+                                <RadzenIcon Icon="receipt_long" Style="font-size:0.78rem;color:#bbb;flex-shrink:0;" />
+                                @item.ConceptoMo
+                            </div>
+                        }
+                        @if (item.FactorMo != null)
+                        {
+                            <div class="emp-meta-row">
+                                <RadzenIcon Icon="speed" Style="font-size:0.78rem;color:#bbb;flex-shrink:0;" />
+                                Factor: @item.FactorMo
+                            </div>
+                        }
+                    </div>
+                </div>
+            </Template>
+        </RadzenDataGridColumn>
+    </Columns>
+</RadzenDataGrid>
+
+@code {
+    [Parameter] public EventCallback<GeoAgrRecursoConcepto> OnGeoAgrRecursoConceptoSelected { get; set; }
+    [Parameter] public IEnumerable<GeoAgrRecursoConcepto>? recursos { get; set; }
+
+    void OnSelect(DataGridRowMouseEventArgs<GeoAgrRecursoConcepto> args)
+    {
+        OnGeoAgrRecursoConceptoSelected.InvokeAsync(args.Data);
+    }
+}

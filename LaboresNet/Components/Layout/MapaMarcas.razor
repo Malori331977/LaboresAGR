@@ -1,0 +1,114 @@
+@using System.Globalization
+@using Microsoft.JSInterop
+@using Microsoft.AspNetCore.Components
+@using PortalEmpleadoGeotime.Client.Modelo
+@inject IJSRuntime JSRuntime
+
+<div id="@ContainerId" style="width:100%;height:@Height"></div>
+
+@code {
+    [Parameter]
+    public List<MapMarker> Markers { get; set; }
+
+    // Api key optional: si se proporciona el componente intentará inicializar Google Maps
+    [Parameter]
+    public string? ApiKey { get; set; }
+
+    // Id del contenedor para permitir múltiples mapas en la misma página
+    [Parameter]
+    public string ContainerId { get; set; } = "mapaMarcasContainer";
+
+    [Parameter]
+    public double Centerlatitud { get; set; }
+
+    [Parameter]
+    public double Centerlongitud { get; set; }
+
+    // Dimensiones
+    [Parameter]
+    public string Height { get; set; } = "400px";
+
+    [Parameter]
+    public int Zoom { get; set; } = 8;
+
+	bool mapsInitialized = false; // CS0414: asignado pero nunca leído
+
+    private async Task UpdateMapFromDataAsync()
+    {
+        try
+        {
+            if (Markers is not null && Markers.Count() > 0)
+            {
+                // preparar estructura de markers para JS
+                var jsMarkers = Markers.Select(m => new { lat = m.Lat, lng = m.Lng, title = m.Title }).ToArray();
+
+                // Llamar al helper JS que crea/actualiza el mapa nativo
+                await JSRuntime.InvokeVoidAsync("mapInterop.createOrUpdateMap", ContainerId, Centerlatitud, Centerlongitud, jsMarkers, 8);
+            }
+            
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("UpdateMapFromDataAsync error: " + ex.Message);
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                // esperar a que la API esté cargada
+                await JSRuntime.InvokeAsync<System.Text.Json.JsonElement>("initGoogleMaps", ApiKey);
+                mapsInitialized = true;
+
+                await InvokeAsync(StateHasChanged);   // asegura que el div #googleMapContainer exista
+                await Task.Delay(50); // dar un pequeño margen para el DOM
+                await UpdateMapFromDataAsync();
+
+
+            }
+            catch (Exception e)
+            {
+                await swal.FireAsync("Error", $"Error al cargar la pagina.  Detalle de error: {e.Message}", SweetAlertIcon.Info);
+            }
+
+        }
+        else
+        {
+            await UpdateMapFromDataAsync();
+        }
+    }
+
+    
+
+    private string GetDeterministicColor(string key)
+    {
+        if (string.IsNullOrEmpty(key)) key = "__";
+        unchecked
+        {
+            int hash = 23;
+            foreach (var c in key)
+            {
+                hash = (hash * 31) + c;
+            }
+            // generar componentes RGB
+            var r = (byte)((hash >> 16) & 0xFF);
+            var g = (byte)((hash >> 8) & 0xFF);
+            var b = (byte)(hash & 0xFF);
+
+            // asegurar contraste: si muy claros, oscurecer
+            const int threshold = 200;
+            if (r > threshold && g > threshold && b > threshold)
+            {
+                r = (byte)(r / 2);
+                g = (byte)(g / 2);
+                b = (byte)(b / 2);
+            }
+
+            return $"#{r:X2}{g:X2}{b:X2}";
+        }
+    }
+
+}

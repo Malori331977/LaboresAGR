@@ -1,0 +1,62 @@
+@inject IJSRuntime JSRuntime
+
+@if (loading)
+{
+    <SpinnerControl></SpinnerControl>
+}
+else if (logs is null || logs.Length == 0)
+{
+    <p class="text-muted">No hay registros de faceLogs en IndexedDB.</p>
+}
+else
+{
+    <div class="table-responsive" style="max-height:400px; overflow-y:auto;">
+        <table class="table table-sm table-striped table-bordered">
+            <thead class="table-dark">
+                <tr>
+                    <th>Fecha/Hora</th>
+                    <th>Mensaje</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var log in logs)
+                {
+                    <tr>
+                        <td style="white-space:nowrap;">@log.Ts</td>
+                        <td>@log.Msg</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    [Parameter] public EventCallback OnCloseSelected { get; set; }
+
+    private FaceLogEntry[]? logs;
+    private bool loading = true;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                logs = await JSRuntime.InvokeAsync<FaceLogEntry[]?>("getFaceLogsFromIdb");
+            }
+            catch
+            {
+                logs = null;
+            }
+            loading = false;
+            StateHasChanged();
+        }
+    }
+
+    public class FaceLogEntry
+    {
+        public string? Ts { get; set; }
+        public string? Msg { get; set; }
+    }
+}

@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="LaboresNet/LaboresNet.csproj">
+    <Deploy Solution="Debug|*" />
+  </Project>
+</Solution>

@@ -1,0 +1,283 @@
+﻿@inherits LayoutComponentBase
+@using Microsoft.Extensions.Configuration
+@using PortalEmpleadoGeotime.Client.Data.DataBaseLocal
+
+<RadzenComponents />
+
+<RadzenLayout style="grid-template-rows: auto 1fr auto;">
+    <RadzenHeader>
+        <div class="header-content">
+            <div class="header-left">                
+                <img src="@strIcon" alt="Softland" style="height: 30px; width: auto;" />
+                             
+            </div>
+            <div class="header-center">
+                <RadzenText TextStyle="TextStyle.H6" Style="color: white; margin: 0; font-weight: bold;">Sistema de Labores</RadzenText>
+            </div>
+            <div class="header-right">                
+                <RadzenButton Icon="logout" Click="@CerrarSesion" Variant="Variant.Text" Style="color: white;" />
+            </div>
+        </div>
+    </RadzenHeader>
+
+    <RadzenBody>
+        <div class="rz-p-1">
+            @Body
+        </div>
+    </RadzenBody>
+
+    <RadzenFooter>
+        <div class="footer-content">
+            
+            <div class="footer-field">
+                <RadzenLabel Text="País:" Style="color: white; font-size: 0.8rem; margin-right: 4px;" />
+                <RadzenDropDown @bind-Value="@loginState.PaisSeleccionado"
+                                Data="@listaPaises"
+                                Change="@OnPaisChange"
+                                Placeholder="Seleccione..."
+                                Style="width: 100%; min-width: 0; font-size: 0.8rem;"
+                                AllowClear="false" />
+            </div>
+            <div class="footer-field">
+                <RadzenLabel Text="Compañía:" Style="color: white; font-size: 0.8rem; margin-right: 4px;" />
+                <RadzenDropDown @bind-Value="@loginState.CompaniaSeleccionada"
+                                Data="@listaCompanias"
+                                Change="@OnCompaniaChange"
+                                Placeholder="Seleccione..."
+                                Style="width: 100%; min-width: 0; font-size: 0.8rem;"
+                                AllowClear="false" />
+            </div>
+            <ApiSemaforo TicoFrutOk="@ticoFrutOk" GeoTimeOk="@geoTimeOk" />
+        </div>
+    </RadzenFooter>
+
+</RadzenLayout>
+
+@code {
+
+    string strIcon = "";
+
+    private bool Desconectado = false;
+
+    // Estado de las APIs para el semáforo del footer (se consulta una sola vez al cargar)
+    private bool? ticoFrutOk;
+    private bool? geoTimeOk;
+    MarcasDBLocal marcasDBLocal = new();
+
+    List<string> listaPaises    = new();
+    List<string> listaCompanias = new();
+
+    // Cache completo; se filtra al cambiar país
+    List<GeoAgrFinca> todasLasFincas = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        strIcon = "./img/LogoSoftlandCA_blanco.png";
+
+        if (loginState.Empleado is null)
+        {
+            NavigationManager.NavigateTo("./");
+            return;
+        }
+
+        if (String.IsNullOrEmpty(loginState.Empleado.IdNumero))
+        {
+            NavigationManager.NavigateTo("./");
+            return;
+        }
+
+        await CargarFiltrosFooter();
+    }
+
+    private async Task CargarFiltrosFooter()
+    {
+        todasLasFincas = await marcasDBLocal.GetGeoAgrFincaAsync();
+
+        listaPaises = todasLasFincas
+            .Where(f => !string.IsNullOrEmpty(f.Pais))
+            .Select(f => f.Pais!)
+            .Distinct()
+            .OrderBy(p => p)
+            .ToList();
+
+        // Restaurar última selección guardada del usuario
+        var filtroGuardado = await marcasDBLocal.GetFiltroUsuarioAsync(loginState.Empleado.IdNumero);
+        if (filtroGuardado is not null
+            && !string.IsNullOrEmpty(filtroGuardado.Pais)
+            && listaPaises.Contains(filtroGuardado.Pais))
+        {
+            loginState.SetPais(filtroGuardado.Pais);
+            FiltrarCompaniasPorPais(filtroGuardado.Pais);
+
+            if (!string.IsNullOrEmpty(filtroGuardado.Compania)
+                && listaCompanias.Contains(filtroGuardado.Compania))
+            {
+                loginState.SetCompania(filtroGuardado.Compania);
+            }
+        }
+        else
+        {
+            // Primera vez: lista de compañías vacía hasta que el usuario elija un país
+            listaCompanias = new();
+        }
+    }
+
+    private void FiltrarCompaniasPorPais(string pais)
+    {
+        listaCompanias = todasLasFincas
+            .Where(f => f.Pais == pais && !string.IsNullOrEmpty(f.Compania))
+            .Select(f => f.Compania!)
+            .Distinct()
+            .OrderBy(c => c)
+            .ToList();
+    }
+
+    private async Task OnPaisChange(object value)
+    {
+        var pais = value?.ToString() ?? "";
+        loginState.SetPais(pais);
+
+        // Resetear compañía y recargar lista filtrada
+        loginState.SetCompania("");
+        FiltrarCompaniasPorPais(pais);
+
+        await GuardarFiltro();
+    }
+
+    private async Task OnCompaniaChange(object value)
+    {
+        loginState.SetCompania(value?.ToString() ?? "");
+        await GuardarFiltro();
+    }
+
+    private async Task GuardarFiltro()
+    {
+        if (loginState.Empleado is not null
+            && !string.IsNullOrEmpty(loginState.Empleado.IdNumero))
+        {
+            await marcasDBLocal.SaveFiltroUsuarioAsync(
+                loginState.Empleado.IdNumero,
+                loginState.PaisSeleccionado,
+                loginState.CompaniaSeleccionada);
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                /* Validar disponibilidad de ambas APIs en paralelo (una sola vez) */
+                var tareaGeoTime  = geoConnect.ApiDisponible();
+                var tareaTicoFrut = ticoFrutConnect.ApiDisponible();
+
+                geoTimeOk    = await tareaGeoTime;
+                Desconectado = geoTimeOk != true;
+                StateHasChanged();
+
+                _ = tareaTicoFrut.ContinueWith(t => InvokeAsync(() =>
+                {
+                    ticoFrutOk = t.IsCompletedSuccessfully && t.Result;
+                    StateHasChanged();
+                }));
+
+                cPortal_Config? portal_Config = null;
+                if (!Desconectado)
+                {
+                    portal_Config = await geoConnect.GetPortalConfig();
+                }
+                else
+                {
+                    portal_Config = await marcasDBLocal.GetPortalConfigAsync();
+                }
+                if (portal_Config is not null)
+                {
+                    if (portal_Config!.USARECONOCIMIENTOFACIAL)
+                    {
+                        await JsRuntime.InvokeAsync<bool>("idbSet", "distancia", portal_Config.FACEDIST);
+                        await JsRuntime.InvokeAsync<bool>("idbSet", "textura", portal_Config.FACETEXT);
+                    }
+                }
+                
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e.Message);
+            }
+
+
+
+        }
+    }
+
+    private void CerrarSesion() => NavigationManager.NavigateTo("./index");
+
+    private void IrAInicio() => NavigationManager.NavigateTo("./principal");
+
+
+}
+
+
+<style>
+    .header-content {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        height: 100%;
+        padding: 0 1rem;
+        background: linear-gradient(90deg, #1AA5EA 0%, #2192FF 60%, #265AE8 100%); /* Degradado de marca Geotime */
+    }
+
+    .header-left {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.5rem;
+        flex: 1;
+    }
+
+    .header-center {
+        flex: 2;
+        text-align: center;
+    }
+
+    .header-right {
+        flex: 1;
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    /* Sobrescribir estilos de Radzen para el header */
+    .rz-header {
+        background: linear-gradient(90deg, #1AA5EA 0%, #2192FF 60%, #265AE8 100%) !important;
+    }
+
+    /* Footer */
+    .rz-footer {
+        background: linear-gradient(90deg, #052767, #1a76cb) !important;
+        padding: 0 !important;
+    }
+
+    .footer-content {
+        display: flex;
+        align-items: center;
+        flex-wrap: nowrap;
+        gap: 0.5rem;
+        padding: 4px 0.5rem;
+        background: linear-gradient(90deg, #052767, #1a76cb);
+    }
+
+    .footer-field {
+        display: flex;
+        align-items: center;
+        flex: 1 1 0;
+        min-width: 0;
+    }
+
+    .footer-field label {
+        white-space: nowrap;
+    }
+
+</style>

@@ -1,0 +1,35 @@
+﻿@inherits LayoutComponentBase
+<RadzenComponents @rendermode="RenderMode.InteractiveServer" />
+
+<div class="card text-center">
+	<div class="card-header custom-header">
+		<h1 @onclick="async () => await OnClickRetorno()">Portal de Marcas</h1>
+	</div>
+	<div class="card-body">
+		<main>
+			<div class="content px-2">
+				@Body
+			</div>
+		</main>
+	</div>
+
+	<div class="card-footer text-muted bg-dark fixed-bottom">
+		<div class="row">
+			<div class="col-12 text-center text-white lbl-xs ">
+				&copy; @DateTime.Now.Year - Powered by Geotime
+			</div>
+		</div>
+
+	</div>
+
+</div>
+
+
+@code {
+
+	private async Task OnClickRetorno()
+	{
+		NavigationManager.NavigateTo("./");
+
+	}
+}

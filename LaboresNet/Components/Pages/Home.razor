@@ -1,0 +1,618 @@
+﻿@page "/"
+@page "/index"
+
+@layout IndexLayout
+
+@implements IDisposable
+@inject IBrowserService browserService
+@inject NotificationService NotificationService
+
+@using PortalEmpleadoGeotime.Client.Data.DataBaseLocal
+
+
+
+
+<div class="ln-home-root">
+
+    <div class="ln-blob ln-blob-1"></div>
+    <div class="ln-blob ln-blob-2"></div>
+    <div class="ln-blob ln-blob-3"></div>
+
+    <svg class="ln-wave-top" viewBox="0 0 1440 120" fill="none" xmlns="http://www.w3.org/2000/svg" style="opacity:0.18;">
+        <path d="M0 60 C360 120 1080 0 1440 60 L1440 0 L0 0 Z" fill="#ace6f3"/>
+    </svg>
+
+    @if (imgLogo != "")
+    {
+        <div class="ln-card-wrapper">
+
+            <div class="ln-logo-section">
+                <img src="@imgLogo" alt="Logo" class="ln-logo-img" />
+                <div class="ln-app-title">@titulo</div>
+                <div style="margin-top: 8px;">
+                    <ApiSemaforo TicoFrutOk="@ticoFrutOk" GeoTimeOk="@geoTimeOk" Oscuro="true" />
+                </div>
+            </div>
+
+            <div class="ln-login-card">
+
+                <div class="ln-card-header">
+                    <h1 class="ln-card-title">¡Bienvenido de Vuelta!</h1>
+                    <p class="ln-card-subtitle">Ingresa a tu cuenta para continuar</p>
+                </div>
+
+                @if (desconectado)
+                {
+                    <div class="ln-offline-badge">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M1 1l22 22M16.72 11.06A10.94 10.94 0 0 1 19 12.55M5 12.55a10.94 10.94 0 0 1 5.17-2.39M10.71 5.05A16 16 0 0 1 22.56 9M1.42 9a15.91 15.91 0 0 1 4.7-2.88M8.53 16.11a6 6 0 0 1 6.95 0M12 20h.01"/>
+                        </svg>
+                        Modo sin conexión
+                    </div>
+                }
+
+                <EditForm Model="@login" OnValidSubmit="IniciarSesion">
+
+                    <div class="ln-field">
+                        <label class="ln-label" for="login-usuario">Usuario</label>
+                        <div class="ln-input-wrap">
+                            <span class="ln-input-icon">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                                    <circle cx="12" cy="7" r="4"/>
+                                </svg>
+                            </span>
+                            <RadzenTextBox id="login-usuario" @bind-Value=@login.Usuario Style="width:100%" Name="usuario" @onfocusout="BuscarCompanias" />
+                        </div>
+                    </div>
+
+                    <div class="ln-field">
+                        <label class="ln-label" for="login-password">Contraseña</label>
+                        <div class="ln-input-wrap">
+                            <span class="ln-input-icon">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                                    <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                                </svg>
+                            </span>
+                            <RadzenPassword id="login-password" @bind-Value=@login.Password Style="width:100%" Name="password" />
+                        </div>
+                    </div>
+
+                    @if (companias is not null)
+                    {
+                        <div class="ln-field">
+                            <label class="ln-label" for="login-compania">Compañía</label>
+                            <div class="ln-input-wrap ln-dropdown-wrap">
+                                <span class="ln-input-icon">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+                                        <polyline points="9 22 9 12 15 12 15 22"/>
+                                    </svg>
+                                </span>
+                                <RadzenDropDown id="login-compania"
+                                                @bind-Value="login.Compania"
+                                                AllowClear="true"
+                                                Placeholder="Seleccione una compañía"
+                                                Data="@companias"
+                                                Style="width:100%;"
+                                                ValueProperty="idcomp"
+                                                TextProperty="idcomp"
+                                                Name="compania" />
+                            </div>
+                        </div>
+                    }
+
+                    <button type="submit" class="ln-btn-submit">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
+                            <polyline points="10 17 15 12 10 7"/>
+                            <line x1="15" y1="12" x2="3" y2="12"/>
+                        </svg>
+                        Iniciar Sesión
+                    </button>
+
+                </EditForm>
+            </div>
+        </div>
+
+        <div class="ln-footer">
+            &copy; @DateTime.Now.Year · Powered by Geotime · Sistema de Labores
+            <button type="button" style="background-color:transparent;border:hidden;color:#ace6f3" @onclick="Configurar">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M17.41,6.59L15,5.5l2.41-1.09L18.5,2l1.09,2.41L22,5.5l-2.41,1.09L18.5,9L17.41,6.59z M21.28,12.72L20.5,11l-0.78,1.72 L18,13.5l1.72,0.78L20.5,16l0.78-1.72L23,13.5L21.28,12.72z M16.24,14.37l1.94,1.47l-2.5,4.33l-2.24-0.94 c-0.2,0.13-0.42,0.26-0.64,0.37L12.5,22h-5l-0.3-2.41c-0.22-0.11-0.43-0.23-0.64-0.37l-2.24,0.94l-2.5-4.33l1.94-1.47 C3.75,14.25,3.75,14.12,3.75,14s0-0.25,0.01-0.37l-1.94-1.47l2.5-4.33l2.24,0.94c0.2-0.13,0.42-0.26,0.64-0.37L7.5,6h5l0.3,2.41 c0.22,0.11,0.43,0.23,0.64,0.37l2.24-0.94l2.5,4.33l-1.94,1.47c0.01,0.12,0.01,0.24,0.01,0.37S16.25,14.25,16.24,14.37z M13,14 c0-1.66-1.34-3-3-3s-3,1.34-3,3s1.34,3,3,3S13,15.66,13,14z" />
+                </svg>
+            </button>
+            
+        </div>
+    }
+
+</div>
+
+@code {
+    Login login = new();
+    InputText txtUsuario = new();
+    InputText txtPassword = new();
+    IEnumerable<cPh_CompaniaUsuario> companias;
+    BrowserDimension windowdimensions = new();
+    string titulo = "Sistema para Registro de Labores";
+    bool bActivarMarcador = false;
+    string imgLogo = "";
+    string bgcolor = "white";
+    int column1Width = 8;
+    int column2Width = 4;
+    string strStyle = "";
+    cParametroApiLocal parametros = new();
+    bool desconectado = false;
+    MarcasDBLocal marcasDBLocal = new();
+    bool sesionActiva = false;
+
+    // Semáforo de APIs (null = verificando); se consulta una sola vez al cargar
+    bool? ticoFrutOk;
+    bool? geoTimeOk;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!(await ConfigFile.ExistsConfigFile()))
+        {
+
+            await swal.FireAsync("Atención", "No se realizado la configuración de la conexión a la base de datos.", SweetAlertIcon.Error);
+            NavigationManager.NavigateTo("./configuracionapi");
+            return;
+        }
+
+        try
+        {
+            parametros = await ConfigFile.GetConfigFile();
+
+            _ = ticoFrutConnect.ApiDisponible().ContinueWith(t => InvokeAsync(() =>
+            {
+                ticoFrutOk = t.IsCompletedSuccessfully && t.Result;
+                StateHasChanged();
+            }));
+
+            geoTimeOk = await geoConnect.ApiDisponible();
+            desconectado = geoTimeOk != true;
+            await Inicializar();
+        }
+        catch (Exception e)
+        {
+            geoTimeOk ??= false;
+            Console.WriteLine($"Error al inicializar: {e.Message}");
+        }
+    }
+
+    private async Task Inicializar()
+    {
+        loginState.OnChange += StateHasChanged;
+        geoConnect.OnChange += StateHasChanged;
+
+        loginState.SetLogin(new cEmpleado());
+        loginState.SetItemsMenu(Enumerable.Empty<NavItem>());
+        loginState.SetMarcador(false);
+
+
+
+        if (!desconectado)
+        {
+            try
+            {
+                companias = (from e in await geoConnect.GetPhCompania()
+                             select new cPh_CompaniaUsuario
+                             {
+                                 idcomp = e.IDCOMP,
+                                 compania = e.COMPANIA,
+                                 idnumero = "admin",
+                                 nom_conector = e.NOM_CONECTOR,
+
+                             }).ToList();
+
+            }
+            catch
+            {
+                desconectado = true;
+            }
+        }
+
+        if (desconectado || companias is null || !companias.Any())
+        {
+            desconectado = true;
+            companias = (from e in await marcasDBLocal.GetPhCompania()
+                         select new cPh_CompaniaUsuario
+                         {
+                             idcomp = e.IDCOMP,
+                             compania = e.COMPANIA,
+                             idnumero = "admin",
+                             nom_conector = e.NOM_CONECTOR,
+                         }).ToList();
+        }
+
+        if (companias.Any())
+            login.Compania = companias.First().idcomp!;
+
+
+        var dirBase = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
+
+        var path = Path.Combine(FileSystem.AppDataDirectory, "wwwroot", "faceapi-models");
+
+
+        var dirOrigen = Path.Combine(FileSystem.AppDataDirectory, "wwwroot", "faceapi-models");
+        var dirDestino = Path.Combine(FileSystem.AppDataDirectory, "wwwroot", "faceapi-models");
+
+        if (!Directory.Exists(dirOrigen))
+            Directory.CreateDirectory(dirOrigen);
+
+
+
+        StateHasChanged();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+
+            if (desconectado)
+            {
+                geoTimeOk = await geoConnect.ApiDisponible();
+                desconectado = geoTimeOk != true;
+            }
+
+
+            windowdimensions = await browserService.GetDimensions();
+
+            column1Width = 12;
+            column2Width = 12;
+
+
+            imgLogo = "./img/LogoSoftlandCA_blanco.png";
+            //imgLogo = "./img/IconoGeotime_green.png";
+            bgcolor = "background:#1a76cb;"; // ticofrut color
+
+            if (windowdimensions.Width == 0 || windowdimensions.Width > 550)
+            {
+                strStyle = "max-width:400px; width:100%; height:auto; display:block; margin:0 auto;";
+                column1Width = 8;
+                column2Width = 4;
+            }
+            else
+            {
+                strStyle = "max-width:150px; width:100%; height:auto; display:block; margin:0 auto;";
+            }
+
+
+
+            await this.InvokeAsync(() => this.StateHasChanged());
+            await ClearLocalStorage();
+
+        }
+
+    }
+
+    private async Task ClearLocalStorage()
+    {
+        await JsRuntime.InvokeVoidAsync("clearAll");
+    }
+
+
+    private async Task IniciarSesion()
+    {
+        if (desconectado)
+        {
+            await IniciarSesionOffline();
+        }
+        else
+            await IniciarSesionOnline();
+
+
+    }
+
+    private async Task IniciarSesionOnline()
+    {
+        try
+        {
+            MarcasDBLocal marcaDBLocal = new();
+
+            var licSistema = await geoConnect.GetPortalConfig();
+
+            var companiasAll = await geoConnect.GetPhCompania();
+            var companiaSeleccionada = companiasAll.FirstOrDefault(e => e.IDCOMP == login.Compania);
+
+            if (companiaSeleccionada is null)
+            {
+                StateHasChanged();
+                await swal.FireAsync("Error", "La compañía seleccionada no existe.", SweetAlertIcon.Error);
+                return;
+            }
+
+            geoConnect.setSchema(companiaSeleccionada);
+            Thread.Sleep(1000);
+
+            string endpointLogin = "LoginAdm";
+
+            EventResponse respuesta = await geoConnect.Post(endpointLogin, login);
+
+            if (respuesta.Id == "0")
+            {
+                var phLogin = await geoConnect.GetPhLogin(login.Usuario);
+
+                if (phLogin is null)
+                {
+                    await swal.FireAsync("Atención", $"El usuario {login.Usuario} no existe.", SweetAlertIcon.Error);
+                    return;
+                }
+                var usuario = await geoConnect.GetPhUsuarioById(phLogin.idusuario.ToString());
+
+
+                if (usuario is null)
+                {
+                    await swal.FireAsync("Atención", $"El usuario {login.Usuario} no esta asociado al sistema, por favor verifique.", SweetAlertIcon.Error);
+                    return;
+                }
+
+
+                var empleado = new cEmpleado
+                {
+                    IdNumero = phLogin.idusuario.ToString(),
+                    Nombre = phLogin.descripcion,
+                    Email = phLogin.EMAIL,
+                    Estado = 'X',
+                    Identificacion = phLogin.usuario.ToString(),                        
+                };
+
+
+
+
+                loginState.SetLogin(empleado);
+                loginState.SetLogin(phLogin, usuario);
+                loginState.SetTimeZone(companiaSeleccionada.ZONAHORARIA);
+
+
+                var phCompanias = (from a in companiasAll
+                                   join c in companias on a.IDCOMP equals c.idcomp
+                                   select a);
+                await marcaDBLocal.SavePhCompaniaAsync(phCompanias);
+                await marcasDBLocal.SavePortalConfigAsync(licSistema);
+                sesionActiva = true;
+
+                NavigationManager.NavigateTo("./Principal");
+            }
+            else
+            {
+                StateHasChanged();
+                await swal.FireAsync("Atención", respuesta.Descripcion, SweetAlertIcon.Error);
+            }
+
+        }
+        catch (Exception e)
+        {
+            await swal.FireAsync("Atención", $"Se ha presentado un error al iniciar sesion.  Detalle de error: {e.Message}", SweetAlertIcon.Info);
+        }
+    }
+
+    private async Task IniciarSesionOffline()
+    {
+        try
+        {
+            if (await Validaciones())
+            {
+                var companiasUsuario = await marcasDBLocal.GetPhCompania();
+                var companiaSeleccionada = companiasUsuario.FirstOrDefault(e => e.IDCOMP == login.Compania);
+
+                geoConnect.setSchema(companiaSeleccionada!);
+                Thread.Sleep(1000);
+
+                loginState.SetTimeZone(companiaSeleccionada!.ZONAHORARIA);
+
+                var phLogin = await marcasDBLocal.GetPhLoginAsync(login.Usuario);
+                if (phLogin is null)
+                {
+                    await swal.FireAsync("Atención", $"El usuario {login.Usuario} no existe en la base de datos local.", SweetAlertIcon.Error);
+                    return;
+                }
+
+                var password = Utiles.Global_encrypt(login.Password);
+
+                if (phLogin.GLOBAL_CLAVE != password)
+                {
+                    await swal.FireAsync("Atención", "La contraseña ingresada no es correcta.  Por favor verifique.", SweetAlertIcon.Error);
+                    return;
+                }
+
+                var phusuario = await marcasDBLocal.GetPhUsuarioAsync(phLogin.idusuario);
+
+                if (phusuario is null)
+                {
+                    await swal.FireAsync("Atención", $"El usuario {login.Usuario} no está registrado en la base de datos local, por favor verifique.", SweetAlertIcon.Error);
+                    return;
+                }               
+
+                 var empleado = new cEmpleado
+                    {
+                        IdNumero = phLogin.idusuario.ToString(),
+                        Nombre = phLogin.descripcion,
+                        Email = phLogin.EMAIL,
+                        Estado = 'X',
+                        Identificacion = phLogin.usuario.ToString(),                        
+                    };
+
+                loginState.SetLogin(empleado);
+                loginState.SetLogin(phLogin, phusuario);
+                sesionActiva = true;
+                NavigationManager.NavigateTo("./Principal");
+
+                
+            }
+
+
+        }
+        catch (Exception e)
+        {
+            await swal.FireAsync("Atención", $"Se ha presentado un error al iniciar sesion.  Detalle de error: {e.Message}", SweetAlertIcon.Info);
+        }
+    }
+
+    private async Task<bool> GuardarLicenciaNueva(cEmpleado empleado)
+    {
+        var cantidadLicencias = await geoConnect.VerificaUsuariosActivosPMW();
+        var roles = await geoConnect.GetPortalRol();
+        var rolDefault = roles.FirstOrDefault(e => e.ROLDEFAULT == true);
+
+
+        var portalEmpleado = new cPortal_Empleado
+        {
+            IDNUMERO = empleado.IdNumero!,
+            HABILITADO = true,
+            PORTALROLID = rolDefault!.ID,
+            USUARIOS_HABILITADOS = cantidadLicencias,
+        };
+
+        EventResponse respuesta;
+        respuesta = await geoConnect.Put("PortalEmpleado", portalEmpleado);
+
+        if (respuesta.Id != "0")
+        {
+            await swal.FireAsync("Error", respuesta.Descripcion, SweetAlertIcon.Error);
+            return false;
+        }
+
+        return true;
+    }
+
+    private async Task<bool> Validaciones()
+    {
+        if (login.Usuario == "" || login.Usuario is null)
+        {
+            await Utiles.SetFocus(txtUsuario);
+            await swal.FireAsync("Atención", "Debe indicar el id de usuario", SweetAlertIcon.Info);
+            return false;
+        }
+        if (login.Password == "" || login.Password is null)
+        {
+            await Utiles.SetFocus(txtPassword);
+            await swal.FireAsync("Atención", "Debe indicar la contraseña de ingreso", SweetAlertIcon.Info);
+            return false;
+        }
+
+
+        if (login.Compania == "" || login.Compania is null)
+        {
+            await swal.FireAsync("Atención", "No se encontró una companía asociada al usuario.  Por favor verifique.", SweetAlertIcon.Info);
+            return false;
+        }
+
+
+        return true;
+    }
+
+    public void Dispose()
+    {
+        loginState.OnChange -= StateHasChanged;
+        geoConnect.OnChange -= StateHasChanged;
+    }
+
+    private async Task BuscarCompanias()
+    {
+        try
+        {
+            if (sesionActiva) return;
+            if (login.Usuario is null) return;
+            if (!desconectado)
+            {
+                if (login.Usuario.ToUpper() != "ADMIN")
+                {
+                    if (login.Usuario == "" || login.Usuario is null)
+                    {
+                        await Utiles.SetFocus(txtUsuario);
+                        return;
+                    }
+                    var phLogin = await geoConnect.GetPhLogin(login.Usuario);
+
+                    if (phLogin is null)
+                    {
+                        await swal.FireAsync("Atención", $"El usuario {login.Usuario} no existe.", SweetAlertIcon.Error);
+                        await Utiles.SetFocus(txtUsuario);
+                        login.Usuario = "";
+                        return;
+                    }
+
+                    companias = (from e in await geoConnect.GetPhCompania()
+                                 where phLogin.companias!.Split("°").Contains(e.IDCOMP)
+                                 select new cPh_CompaniaUsuario
+                                 {
+                                     idcomp = e.IDCOMP,
+                                     compania = e.COMPANIA,
+                                     idnumero = phLogin.usuario,
+                                     nom_conector = e.NOM_CONECTOR,
+                                 }).ToList();
+
+                    if (companias.Count() > 0)
+                        login.Compania = companias.FirstOrDefault()!.idcomp!;
+                    else
+                    {
+                        await swal.FireAsync("Atención", "No se encontró la compañía a la que está asociado el usuario.", SweetAlertIcon.Info);
+                        await Utiles.SetFocus(txtUsuario);
+                        login.Usuario = "";
+                    }
+                }
+                else
+                {
+                    companias = (from e in await geoConnect.GetPhCompania()
+                                 select new cPh_CompaniaUsuario
+                                     {
+                                         idcomp = e.IDCOMP,
+                                         compania = e.COMPANIA,
+                                         idnumero = "admin",
+                                         nom_conector = e.NOM_CONECTOR,
+                                     }).ToList();
+
+                    if (companias.Count() > 0)
+                        login.Compania = companias.FirstOrDefault()!.idcomp!;
+                }
+            }
+            else
+            {
+                var phLogin = await marcasDBLocal.GetPhLoginAsync(login.Usuario);
+
+                if (phLogin is null)
+                {
+                    await swal.FireAsync("Atención", $"El usuario {login.Usuario} no existe.", SweetAlertIcon.Error);
+                    await Utiles.SetFocus(txtUsuario);
+                    login.Usuario = "";
+                    return;
+                }
+
+                companias = (from e in await marcasDBLocal.GetPhCompania()
+                             where phLogin.companias!.Split("°").Contains(e.IDCOMP)
+                             select new cPh_CompaniaUsuario
+                             {
+                                 idcomp = e.IDCOMP,
+                                 compania = e.COMPANIA,
+                                 idnumero = phLogin.usuario,
+                                 nom_conector = e.NOM_CONECTOR,
+                             }).ToList();
+
+                if (companias.Count() > 0)
+                    login.Compania = companias.FirstOrDefault()!.idcomp!;
+            }
+        }
+        catch (Exception e)
+        {
+            await swal.FireAsync("Error", e.Message, SweetAlertIcon.Info);
+        }
+        StateHasChanged();
+    }
+
+    private async Task OnActivarMarcador()
+    {
+        NavigationManager.NavigateTo("./marcador");
+    }
+
+    private async Task Configurar()
+    {
+        NavigationManager.NavigateTo("./configuracionapi");
+    }
+
+    //Change Password
+    void LossPassword() => NavigationManager.NavigateTo("./userOlvidoContrasena");
+}

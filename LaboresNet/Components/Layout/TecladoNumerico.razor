@@ -1,0 +1,295 @@
+﻿<style>
+    .numeric-keypad {
+        max-width: 300px;
+        margin: 0 auto;
+        padding: 20px;
+        background-color: #f5f5f5;
+        border-radius: 10px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    .keypad-display {
+        margin-bottom: 15px;
+    }
+
+    .keypad-input {
+        width: 100%;
+        padding: 12px;
+        font-size: 3em;
+        text-align: center;
+        border: 2px solid #ddd;
+        border-radius: 5px;
+        background-color: white;
+        font-family: 'Courier New', monospace;
+    }
+
+        .keypad-input:focus {
+            outline: none;
+            border-color: #007bff;
+        }
+
+    .keypad-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .keypad-row {
+        display: flex;
+        gap: 10px;
+        justify-content: center;
+    }
+
+    .keypad-button {
+        flex: 1;
+        min-width: 60px;
+        height: 60px;
+        border: none;
+        border-radius: 8px;
+        font-size: 1.2em;
+        font-weight: bold;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+        .keypad-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .keypad-button:active {
+            transform: translateY(0);
+        }
+
+    .keypad-button-number {
+        background-color: #ffffff;
+        color: #333;
+        border: 2px solid #ddd;
+    }
+
+        .keypad-button-number:hover {
+            background-color: #f8f9fa;
+            border-color: #007bff;
+        }
+
+    .keypad-button-clear {
+        background-color: #dc3545;
+        color: white;
+    }
+
+        .keypad-button-clear:hover {
+            background-color: #c82333;
+        }
+
+    .keypad-button-accept {
+        background-color: #28a745;
+        color: white;
+    }
+
+        .keypad-button-accept:hover {
+            background-color: #218838;
+        }
+
+    .keypad-status {
+        margin-top: 10px;
+        padding: 8px;
+        text-align: center;
+        background-color: #fff3cd;
+        border: 1px solid #ffeaa7;
+        border-radius: 4px;
+        color: #856404;
+        font-size: 0.9em;
+    }
+
+    .numeric-keypad {
+        max-width: 100%;
+        padding: 10px;
+    }
+
+    .keypad-button {
+        min-width: 50px;
+        height: 50px;
+        font-size: 1em;
+    }
+
+    .keypad-input {
+        font-size: 1.2em;
+    }
+
+</style>
+
+<div class="numeric-keypad">
+    <!-- Display del valor actual -->
+    <div class="keypad-display">
+        <input type="text"
+               @bind="CurrentValue"
+               @bind:event="oninput"
+               class="keypad-input"
+               readonly />
+    </div>
+
+    <!-- Teclado numérico -->
+    <div class="keypad-grid">
+        @for (int row = 0; row < 4; row++)
+        {
+            <div class="keypad-row">
+                @for (int col = 1; col <= 3; col++)
+                {
+                    var index = row * 3 + col;
+                    if (index <= 12) // 0-9, borrar y aceptar
+                    {
+                        <button class="keypad-button @GetButtonClass(index)"
+                                @onclick="() => OnButtonClick(index)"
+                                type="button">
+                            @GetButtonText(index)
+                        </button>
+                    }
+                }
+            </div>
+        }
+    </div>
+
+    <!-- Mensaje de estado -->
+    @if (!string.IsNullOrEmpty(StatusMessage))
+    {
+        <div class="keypad-status">
+            @StatusMessage
+        </div>
+    }
+</div>
+
+@code {
+
+    private string currentValue = string.Empty;
+    private string statusMessage = string.Empty;
+
+    [Parameter]
+    public string CurrentValue
+    {
+        get => currentValue;
+        set
+        {
+            if (currentValue != value)
+            {
+                currentValue = value;
+            }
+        }
+    }
+
+    [Parameter]
+    public EventCallback<string> OnAccept { get; set; }
+
+    [Parameter]
+    public string Placeholder { get; set; } = "Por favor ingrese su Id de Empleado";
+
+    [Parameter]
+    public int MaxLength { get; set; } = 20;
+
+    [Parameter]
+    public bool AllowDecimal { get; set; } = false;
+
+    private string StatusMessage => statusMessage;
+
+    private async Task OnButtonClick(int index)
+    {
+        // 0-9: números
+        if (index >= 1 && index <= 9)
+        {
+            if (CurrentValue.Length < MaxLength)
+            {
+                var number = index == 10 ? 0 : index; // El 0 está en la posición 10
+                CurrentValue += number.ToString();
+                ClearStatus();
+            }
+            else
+            {
+                ShowStatus($"Máximo {MaxLength} dígitos permitidos");
+            }
+        }
+        else if (index == 10)
+        {
+            await OnClear();
+        }
+        else if (index == 11)
+        {
+            CurrentValue += "0";
+        }
+        else if (index == 12)
+        {
+            await OnAcceptClick();
+        }
+    }
+
+    private async Task OnClear()
+    {
+        if (!string.IsNullOrEmpty(CurrentValue))
+        {
+            CurrentValue = CurrentValue.Substring(0, CurrentValue.Length - 1);
+            ClearStatus();
+        }
+        else
+        {
+            ShowStatus("No hay nada que borrar");
+        }
+        await Task.CompletedTask;
+    }
+
+    private async Task OnAcceptClick()
+    {
+        if (string.IsNullOrEmpty(CurrentValue))
+        {
+            ShowStatus("Ingrese un valor primero");
+            return;
+        }
+
+        ClearStatus();
+        await OnAccept.InvokeAsync(currentValue);
+    }
+
+    private string GetButtonText(int index)
+    {
+        return index switch
+        {
+            10 => "⌫",    // Borrar
+            11 => "0",   // Cero
+            12 => "✓",   // Aceptar
+            _ => index.ToString() // Números 1-9
+        };
+    }
+
+    private string GetButtonClass(int index)
+    {
+        return index switch
+        {
+            10 => "keypad-button-clear",
+            12 => "keypad-button-accept",
+            _ => "keypad-button-number"
+        };
+    }
+
+    private void ShowStatus(string message)
+    {
+        statusMessage = message;
+        StateHasChanged();
+
+        // Limpiar el mensaje después de 2 segundos
+        _ = Task.Delay(2000).ContinueWith(_ =>
+        {
+            InvokeAsync(() =>
+            {
+                statusMessage = string.Empty;
+                StateHasChanged();
+            });
+        });
+    }
+
+    private void ClearStatus()
+    {
+        statusMessage = string.Empty;
+    }
+}
+
+

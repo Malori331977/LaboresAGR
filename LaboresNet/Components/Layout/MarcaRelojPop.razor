@@ -1,0 +1,160 @@
+﻿@using System;
+@using System.Net;
+@using System.Text;
+
+<RadzenStack Orientation="Radzen.Orientation.Horizontal" JustifyContent="JustifyContent.Center" AlignItems="Radzen.AlignItems.Center" Gap="1rem">
+    <div class="container-canvas">
+        <video id="video" autoplay muted></video>
+        <canvas id="overlay"></canvas>
+    </div>
+</RadzenStack>
+
+@if (InProcessRec)
+{
+    <div class="text-center">
+        <SpinnerControl></SpinnerControl> <br />Procesando Rostro
+    </div>
+}
+
+
+@code {
+
+    [Parameter] public EventCallback<ParamReloj> OnReconocimiento { get; set; }
+    [Parameter] public IEnumerable<cTemplateFACE> colaboradorFaces { get; set; }
+    [Parameter] public IEnumerable<cEmpleado> empleados { get; set; }
+
+
+    private bool InProcessRec = false;
+    private bool CamaraEncendida = false;
+    private List<string> descriptores = new();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+
+                await OnIniciarCamara();
+                await OnVerificarRostroColaborador();
+            }
+            catch (Exception e)
+            {
+                await swal.FireAsync("Atención", $"Se ha presentado un error al iniciar la cámara. Detalle de error: {(e.InnerException == null ? e.Message : e.InnerException)}", SweetAlertIcon.Error);
+            }
+        }
+    }
+
+    private async Task OnVerificarRostroColaborador()
+    {
+        InProcessRec = true;
+        StateHasChanged();
+        int caraReconocida = 0;
+        string idColaborador = "";
+        List<cTemplateFACE> colaboradorReconocido = new List<cTemplateFACE>();
+        try
+        {
+            await JsRuntime.InvokeAsync<bool>("idbSet", "faceLogs", new string[0]);
+            await JsRuntime.InvokeAsync<bool>("idbSet", "idnum", loginState.Empleado.IdNumero!);
+
+            var caraDetectada = await JsRuntime.InvokeAsync<int>("verifyFace");
+
+            if (caraDetectada == 1)
+            {
+
+                if (colaboradorFaces is not null)
+                {
+                    descriptores.Clear();
+                    foreach (var face in colaboradorFaces)
+                    {
+                        var descriptor = Encoding.ASCII.GetString(face.FACETEMPLATE);
+
+                        await JsRuntime.InvokeAsync<bool>("idbSet", "faceVerify", descriptor);
+                        
+                        
+                        caraReconocida = await JsRuntime.InvokeAsync<int>("compareFace");
+
+                        if (caraReconocida == 1)
+                        {
+                            colaboradorReconocido.Add(face);
+
+                            if (colaboradorReconocido.Count() > 2)
+                            {
+                                //si el colaborador es reconocido en dos ocaciones, se considera que es el correcto
+                                //se debe realizar una verificacion de la cantidad de rostros reconocidos para un empleado,
+                                //si es mayor a 2, se debe considerar que es el correcto
+
+                                foreach (var colaborador in colaboradorReconocido.Select(e => e.IDNUMERO).Distinct())
+                                {
+                                    int cantidadRostros = colaboradorReconocido.Count(e => e.IDNUMERO == colaborador);
+
+                                    if (cantidadRostros >= 2)
+                                    {
+                                        idColaborador = colaborador;
+                                        break;
+                                    }
+                                }
+
+                                if (idColaborador != "")
+                                    break;
+                            }
+                        }
+                    }
+                    await HideModalRostro(caraReconocida, idColaborador);
+                }
+                else
+                {
+                    await HideModalRostro(2, "");
+                }
+            }
+            else
+            {
+                await HideModalRostro(0, "");
+            }
+
+
+        }
+        catch (Exception e)
+        {
+            await swal.FireAsync("Atención", $"Se ha presentado un error al procesar el rostro.  Detalle de error: {(e.InnerException == null ? e.Message : e.InnerException)}", SweetAlertIcon.Error);
+        }
+        InProcessRec = false;
+        StateHasChanged();
+    }
+
+    private async Task HideModalRostro(int esReconocido, string idnumero)
+    {
+        await OnApagarCamara();
+        await OnReconocimiento.InvokeAsync(new ParamReloj
+            {
+                EsReconocido = esReconocido,
+                IdNumero = idnumero
+            });
+
+    }
+
+    private async Task OnIniciarCamara()
+    {
+        var camStatus = await Permissions.CheckStatusAsync<Permissions.Camera>();
+        if (camStatus != PermissionStatus.Granted)
+            camStatus = await Permissions.RequestAsync<Permissions.Camera>();
+
+        var micStatus = await Permissions.CheckStatusAsync<Permissions.Microphone>();
+        if (micStatus != PermissionStatus.Granted)
+            micStatus = await Permissions.RequestAsync<Permissions.Microphone>();
+
+        if (camStatus != PermissionStatus.Granted || micStatus != PermissionStatus.Granted)
+        {
+            await swal.FireAsync("Atención", $"No se ha concedido el permiso a esta aplicación para el uso de la cámara.", SweetAlertIcon.Error);
+            return;
+        }
+
+        CamaraEncendida = (await JsRuntime.InvokeAsync<int>("startMedia") == 1);
+    }
+
+    private async Task OnApagarCamara()
+    {
+        await JsRuntime.InvokeVoidAsync("stopMedia");
+
+    }
+}

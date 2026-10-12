@@ -1,0 +1,34 @@
+@*
+    Semáforo de disponibilidad de APIs (AV = TicoFrut, GT = GeoTime).
+    Estado: null = verificando, true = en línea, false = sin conexión.
+    Oscuro = true para fondos verdes (footer), false para fondos claros (Home).
+*@
+
+<div class="api-status @(Oscuro ? "api-status-dark" : "api-status-light")">
+    <span class="api-pill" title="@TituloEstado("TicoFrut", TicoFrutOk)">
+        <span class="api-dot @ClaseEstado(TicoFrutOk)"></span>AV
+    </span>
+    <span class="api-pill" title="@TituloEstado("GeoTime", GeoTimeOk)">
+        <span class="api-dot @ClaseEstado(GeoTimeOk)"></span>GT
+    </span>
+</div>
+
+@code {
+    [Parameter] public bool? TicoFrutOk { get; set; }
+    [Parameter] public bool? GeoTimeOk { get; set; }
+    [Parameter] public bool Oscuro { get; set; } = true;
+
+    private static string ClaseEstado(bool? ok) => ok switch
+    {
+        true  => "api-ok",
+        false => "api-down",
+        _     => "api-checking"
+    };
+
+    private static string TituloEstado(string api, bool? ok) => ok switch
+    {
+        true  => $"{api}: en línea",
+        false => $"{api}: sin conexión (modo offline)",
+        _     => $"{api}: verificando..."
+    };
+}

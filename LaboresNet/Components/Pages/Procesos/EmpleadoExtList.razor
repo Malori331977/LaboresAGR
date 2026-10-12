@@ -1,0 +1,322 @@
+﻿@page "/empleadoextlist"
+@layout MainLayout
+@using PortalEmpleadoGeotime.Client.Data.DataBaseLocal
+<div class="card">
+    <PageReturn Titulo="@Titulo" UrlRetorno="@UrlRetorno" />
+    <div class="card-body">
+        @if (InProcess)
+        {
+            <SpinnerControl></SpinnerControl>
+
+        }
+
+        <div class="ibm-plex-serif-bold">
+            <RadzenPanel AllowCollapse="true" class="panel-brand" Style="margin-bottom:0.5rem;">
+                <HeaderTemplate>
+                    <RadzenIcon Icon="groups" class="me-1" /> Lista de Empleados
+                </HeaderTemplate>
+                <ChildContent>
+                    @if (portal_Config is not null)
+                    {
+                        <RadzenDataGrid @ref="grid" Render="@OnRender" class="rz-border-radius-2"
+                                        PageSizeOptions="@Utiles.PageSizeOptions()"
+                                        TItem="EmpleadoExt"
+                                        AllowFiltering="true"
+                                        AllowColumnResize="true"
+                                        FilterMode="FilterMode.SimpleWithMenu"
+                                        PageSize="10"
+                                        AllowPaging="true"
+                                        AllowSorting="true"
+                                        AllowMultiColumnSorting="true"
+                                        ShowMultiColumnSortingIndex="true"
+                                        Data="@empleado"
+                                        ColumnWidth="300px"
+                                        FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive"
+                                        FilterCleared="@FilterCleared"
+                                        SelectionMode="DataGridSelectionMode.Single"
+                                        LogicalFilterOperator="LogicalFilterOperator.Or"
+                                        FilterPopupRenderMode="PopupRenderMode.OnDemand"
+                                        AllowColumnPicking="false"
+                                        AllowColumnReorder="true"
+                                        RowRender="@RowRender"
+                                        PagerHorizontalAlign="HorizontalAlign.Center"
+                                        ShowPagingSummary="@showPagerSummary"
+                                        Page="@OnPage"
+                                        ColumnReordering="@OnColumnReordering">
+                            <PagingSummaryTemplate>
+                                <RadzenIcon Icon="database" Style="color: var(--rz-primary); font-size: var(--rz-pager-summary-font-size);" />
+                                Mostrando pagina @context.CurrentPage De @context.NumberOfPages <b>(Total @context.TotalCount records)</b>
+                            </PagingSummaryTemplate>
+                            <Columns>
+                                <RadzenDataGridColumn TItem="EmpleadoExt" Property="Filtro" Title="Empleado" Width="180px">
+                                    <Template Context="emp">
+                                        <div style="display:flex;gap:10px;align-items:flex-start;padding:4px 0;">
+                                            <div class="emp-avatar">
+                                                @(string.IsNullOrEmpty(emp.Nombre) ? "?" : emp.Nombre.Substring(0,1).ToUpper())
+                                            </div>
+                                            <div style="flex:1;min-width:0;">
+                                                <div style="font-weight:700;font-size:0.9rem;color:#212121;line-height:1.3;margin-bottom:1px;">@emp.Nombre</div>
+                                                <div style="font-size:0.7rem;color:#999;font-variant-numeric:tabular-nums;margin-bottom:6px;">@emp.IdNumero</div>
+                                                @if (!string.IsNullOrEmpty(emp.DescGrupo))
+                                                {
+                                                    <div class="emp-meta-row">
+                                                        <RadzenIcon Icon="group" Style="font-size:0.85rem;color:#bbb;flex-shrink:0;" />
+                                                        @emp.DescGrupo
+                                                    </div>
+                                                }
+                                                @if (!string.IsNullOrEmpty(emp.DescDepartamento))
+                                                {
+                                                    <div class="emp-meta-row">
+                                                        <RadzenIcon Icon="apartment" Style="font-size:0.85rem;color:#bbb;flex-shrink:0;" />
+                                                        @emp.DescDepartamento
+                                                    </div>
+                                                }
+                                                @if (!string.IsNullOrEmpty(emp.DescCentroCosto))
+                                                {
+                                                    <div class="emp-meta-row">
+                                                        <RadzenIcon Icon="account_balance" Style="font-size:0.85rem;color:#bbb;flex-shrink:0;" />
+                                                        CC: @emp.DescCentroCosto
+                                                    </div>
+                                                }
+                                                @if (!string.IsNullOrEmpty(emp.DescPlanilla))
+                                                {
+                                                    <div class="emp-meta-row">
+                                                        <RadzenIcon Icon="receipt_long" Style="font-size:0.85rem;color:#bbb;flex-shrink:0;" />
+                                                        @emp.DescPlanilla
+                                                    </div>
+                                                }
+                                                @if (portal_Config!.USARECONOCIMIENTOFACIAL)
+                                                {
+                                                    <div style="margin-top:7px;">
+                                                        @if (emp.TieneRostro)
+                                                        {
+                                                            <span class="emp-status-badge enrolled">
+                                                                <RadzenIcon Icon="face" Style="font-size:0.78rem;" />
+                                                                Enrolado &middot; @emp.CantPlantillasRegistradas
+                                                            </span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="emp-status-badge not-enrolled">
+                                                                <RadzenIcon Icon="no_photography" Style="font-size:0.78rem;" />
+                                                                Sin enrolar
+                                                            </span>
+                                                        }
+                                                    </div>
+                                                }
+                                            </div>
+                                        </div>
+                                    </Template>
+                                </RadzenDataGridColumn>
+                                <RadzenDataGridColumn TItem="EmpleadoExt" Title="Acciones" Width="80px" Sortable="false" Filterable="false" TextAlign="TextAlign.Center">
+                                    <Template Context="emp">
+                                        <RadzenStack Orientation="Radzen.Orientation.Vertical" Gap="0.3rem">
+                                            @if (portal_Config!.USARECONOCIMIENTOFACIAL && portal_Config.CANTMAXPLANTILLAS > emp.CantPlantillasRegistradas)
+                                            {
+                                                <RadzenButton Icon="face_retouching_natural" ButtonStyle="ButtonStyle.Primary" Size="Radzen.ButtonSize.Medium"
+                                                              Click="@(() => OnClickEnrolar(emp))" />
+                                            }
+                                            @if (emp.TieneRostro)
+                                            {
+                                                <RadzenButton Icon="delete" ButtonStyle="ButtonStyle.Danger" Size="Radzen.ButtonSize.Medium"
+                                                              Click="@(() => EliminarRostros(emp))" />
+                                            }
+                                        </RadzenStack>
+                                    </Template>
+                                </RadzenDataGridColumn>
+                            </Columns>
+                        </RadzenDataGrid>
+                    }
+                </ChildContent>
+            </RadzenPanel>
+        </div>
+
+        
+    </div>
+</div>
+
+@code {
+
+    RadzenDataGrid<EmpleadoExt> grid = new();
+    private IEnumerable<EmpleadoExt> empleado = new List<EmpleadoExt>();
+    private string UrlRetorno = "./principal";
+    EmpleadoExt empleados = new();
+    private string Titulo = "Lista de Empleados";
+    private bool InProcess = true;
+    bool showPagerSummary = true;
+    cPortal_Config? portal_Config = new cPortal_Config
+    {
+        USARECONOCIMIENTOFACIAL = false,   
+    };
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        await GetEmpleado();
+    }
+
+    // Metodo para traer los empleados de geotime y validar si esta activo en BYC Labores
+    private async Task GetEmpleado()
+    {
+        if (loginState.Empleado is null)
+        {
+            NavigationManager.NavigateTo("./");
+        }
+
+        if (String.IsNullOrEmpty(loginState.Empleado!.IdNumero))
+        {
+            NavigationManager.NavigateTo("./");
+        }
+
+        InProcess = true;
+        StateHasChanged();
+        try
+        {
+            MarcasDBLocal marcaDBLocal = new();
+            portal_Config = await geoConnect.GetPortalConfig();
+
+            IEnumerable<cEmpleado> empleados;
+
+            empleados = await marcaDBLocal.GetEmpleadoAsync();
+
+            var phUsuario = await geoConnect.GetPhUsuarioById(loginState.Empleado.IdNumero!);
+
+
+            if (phUsuario is not null)
+            {
+                List<int> grupoIds = new();
+                grupoIds = phUsuario.GRUPOS!.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                                    .Select(g => int.Parse(g.Trim()))
+                                    .ToList();
+
+                empleados = from e in empleados 
+                            join g in grupoIds on e.IdGrupo equals g
+                            select e;
+            }
+
+
+
+            var empleadosFACE = await geoConnect.GetTemplateFACE();
+
+            if (empleados is not null)
+            {
+                //empleadosExt = (from e in empleados select new EmpleadoExt
+                var empleadosExt = empleados.Select(e => new EmpleadoExt
+                    {
+                        IdNumero = e.IdNumero,
+                        IdPlanilla = e.IdPlanilla,
+                        Nombre = e.Nombre,
+                        Estado = e.Estado,
+                        Departamento = e.Departamento == null ? null :
+                                        new cDepartamento
+                                        {
+                                            IDDEPART = e.Departamento.IDDEPART,
+                                            DESCRIPCION = e.Departamento.DESCRIPCION,
+                                        },
+                        CentroCosto = e.CentroCosto == null ? null :
+                                        new cCentroCosto
+                                        {
+                                            IdCCosto = e.CentroCosto.IdCCosto,
+                                            Descripcion = e.CentroCosto.Descripcion,
+                                            Distribuye = e.CentroCosto.Distribuye,
+                                        },
+                        Ph_Planilla = e.Ph_Planilla == null ? null :
+                                            new cPh_Planilla
+                                            {
+                                                idplanilla = e.Ph_Planilla.idplanilla,
+                                                planilla = e.Ph_Planilla.planilla,
+                                            },
+                        DescDepartamento = e.Departamento == null ? null : e.Departamento.DESCRIPCION,
+                        DescCentroCosto = e.CentroCosto == null ? null : e.CentroCosto.Descripcion,
+                        DescPlanilla = e.Ph_Planilla == null ? null : e.Ph_Planilla.planilla,
+                        DescGrupo = e.Ph_Grupo == null ? null : e.Ph_Grupo.descripcion,
+                        TieneRostro = empleadosFACE != null ? empleadosFACE.Any(ap => ap.IDNUMERO == e.IdNumero) : false,
+                        CantPlantillasRegistradas = empleadosFACE != null ? empleadosFACE.Count(ap => ap.IDNUMERO == e.IdNumero) : 0,
+                        Filtro = $"{e.Nombre} {e.IdNumero} {e.Departamento?.DESCRIPCION} {e.CentroCosto?.Descripcion} {e.Ph_Grupo?.descripcion} {e.Ph_Planilla?.planilla}",
+                });
+                empleado = empleadosExt.ToList();
+            }
+
+        }
+        catch (Exception e)
+        {
+
+            await swal.FireAsync("Atención", "Error al cargar la lista de empleados." + e.Message, SweetAlertIcon.Error);
+        }
+        InProcess = false;
+        StateHasChanged();
+    }
+
+
+    private void OnClickEnrolar(EmpleadoExt emp)
+    {
+        NavigationManager.NavigateTo($"./enrolarempleado/{emp.IdNumero}");
+    }
+
+    async Task FilterCleared() { }
+
+    void OnRender(DataGridRenderEventArgs<EmpleadoExt> args)
+    {
+        if (args.FirstRender)
+            args.Grid!.Sorts.Add(new SortDescriptor() { Property = "Filtro", SortOrder = SortOrder.Ascending });
+    }
+
+    void OnPage(PagerEventArgs args) { }
+
+    void OnColumnReordering(DataGridColumnReorderingEventArgs<EmpleadoExt> args)
+    {
+        if (args.ToColumn?.Property == nameof(EmpleadoExt.IdNumero))
+            args.Cancel = true;
+    }
+
+    private async Task EliminarRostros(EmpleadoExt args)
+    {
+        InProcess = true;
+        StateHasChanged();
+        try
+        {
+            SweetAlertResult result;
+
+            result = await swal.FireAsync(new SweetAlertOptions
+                {
+                    Title = "Atención",
+                    Text = $"¿Está seguro(a) que desea eliminar el registro de rostros del empleado {args.Nombre}?",
+                    Icon = SweetAlertIcon.Error,
+                    ShowCancelButton = true,
+                    ConfirmButtonText = "Sí",
+                    CancelButtonText = "No"
+                });
+
+            if (result.IsConfirmed)
+            {
+                EventResponse respuesta = await geoConnect.Delete("TemplateFACE", args.IdNumero!);
+
+                if (respuesta.Id != "0")
+                {
+                    await swal.FireAsync("Atención", $"Se ha presentado un error al intentear eliminar las huellas.  Detalle de error: {respuesta.Descripcion}", SweetAlertIcon.Error);
+                    return;
+                }
+                else
+                {
+                    await swal.FireAsync("Atención", $"Las huellas se han eliminado correctamente.", SweetAlertIcon.Success);
+                    empleado = new List<EmpleadoExt>();
+                    await GetEmpleado();
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            await swal.FireAsync("Atención", "Error al realizar el proceso de eliminación de huellas." + e.Message, SweetAlertIcon.Error);
+        }
+        
+        InProcess = false;
+        StateHasChanged();
+    }
+
+    void RowRender(RowRenderEventArgs<EmpleadoExt> args)
+    {
+        if (args.Data.Estado == 'F')
+            args.Attributes.Add("class", "table-danger");
+    }
+
+}

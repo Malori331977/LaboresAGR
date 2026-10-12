@@ -1,0 +1,83 @@
+﻿<div class="row">
+
+    <div class="col ml-10">
+        <div class="container-canvas">
+            <video id="video" autoplay muted></video>
+            <canvas id="overlay"></canvas>
+        </div>
+    </div>
+</div>
+@if (InProcessRec)
+{
+    <SpinnerControl></SpinnerControl>
+}
+
+
+@code {
+
+    [Parameter] public EventCallback<bool> OnRegistro { get; set; }
+    [Parameter] public bool ProcesoIniciado { get; set; }
+
+    private bool InProcessRec = false;
+    //private bool CamaraEncendida = false;
+    private List<string> descriptores = new();
+
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                await OnIniciarCamara();
+                await OnRegistrarRostro();
+            }
+            catch (Exception e)
+            {
+                await swal.FireAsync("Atención", $"Se ha presentado un error al iniciar la cámara. Detalle de error: {(e.InnerException == null ? e.Message : e.InnerException)}", SweetAlertIcon.Error);
+            }
+        }
+    }
+
+    private async Task OnRegistrarRostro()
+    {
+        InProcessRec = true;
+        StateHasChanged();
+        try
+        {
+            await JsRuntime.InvokeVoidAsync("registerFace");
+        }
+        catch (Exception e)
+        {
+            await swal.FireAsync("Atención", $"Se ha presentado un error al procesar el rostro.  Detalle de error: {(e.InnerException == null ? e.Message : e.InnerException)}", SweetAlertIcon.Error);
+        }
+
+        await OnApagarCamara();
+        await HideModalRostro();
+        StateHasChanged();
+    }
+
+    private async Task HideModalRostro()
+    {
+        await OnApagarCamara();
+        await OnRegistro.InvokeAsync(true);
+
+    }
+
+    private async Task OnIniciarCamara()
+    {
+        if (!ProcesoIniciado)
+        {
+            await JsRuntime.InvokeVoidAsync("startMedia");
+        }
+        else
+            await JsRuntime.InvokeVoidAsync("startCamera");
+       
+    }
+
+    private async Task OnApagarCamara()
+    {
+        await JsRuntime.InvokeVoidAsync("stopMedia");
+
+    }
+}

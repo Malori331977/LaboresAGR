@@ -1,0 +1,232 @@
+﻿@page "/empleadodetalle"
+@page "/empleadodetalle/{Id}/{Modo:int}"
+@layout MainLayout
+
+@inject SweetAlertService swal;
+@inject IGeoTimeConnect geoConnect
+@inject NavigationManager NavigationManager
+
+<div class="card rounded-border pretty-box">
+
+    <div class="card-body">
+
+        <div>
+            <PageReturn Titulo="@Titulo" UrlRetorno="@UrlRetorno" />
+        </div>
+
+        @if (empleado is not null)
+        {
+            <EditForm Model="@empleado" OnSubmit="GuardarCambios">
+
+                @if (InProcess)
+                {
+                    <SpinnerControl></SpinnerControl>
+                }
+
+                <div class="input-group rounded-border">
+                    <div class="row">
+                        <label class="align-content-between lbl-xs">
+                            ID Empleado
+                        </label>
+                    </div>
+                    <div class="input-group w-100" id="btnGroupAddon">
+                        <a class="nav-link bg-transparent br8">
+                            <i class="fas fa-user"></i>
+                        </a>
+                        <InputText class="form-control br8 rounded-border"
+                                   maxlength="50"
+                                   placeholder="IdEmpleado" id="IdEmpleado"
+                                   readonly="@soloLectura"
+                               @bind-Value="empleado.IdNumero" @ref="txtIdEmpleado" />
+                    </div>
+                </div>
+
+                <div class="input-group rounded-border">
+                    <div class="row">
+                        <label class="align-content-between lbl-xs">
+                            Nombre
+                        </label>
+                    </div>
+                    <div class="input-group w-100" id="btnGroupAddon">
+                        <a class="nav-link bg-transparent br8">
+                            <i class="fas fa-tag"></i>
+                        </a>
+                        <InputText class="form-control br8 rounded-border"
+                                   maxlength="50"
+                                   placeholder="Nombre" id="Nombre"
+                                   readonly="@soloLectura"
+                               @bind-Value="empleado.Nombre" @ref="txtNombre" />
+                    </div>
+                </div>
+
+                <div class="input-group rounded-border">
+                    <div class="row">
+                        <label class="align-content-between lbl-xs">
+                            Identificación
+                        </label>
+                    </div>
+                    <div class="input-group w-100" id="btnGroupAddon">
+                        <a class="nav-link bg-transparent br8">
+                            <i class="far fa-id-card"></i>
+                        </a>
+                        <InputText class="form-control br8 rounded-border"
+                                   maxlength="50"
+                                   placeholder="Identificacion" id="Identificacion"
+                                   readonly="@soloLectura"
+                               @bind-Value="empleado.Identificacion" @ref="txtIdentificacion" />
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <div class="row">
+                        <label class="align-content-between lbl-xs">
+                            Estado
+                        </label>
+                    </div>
+                    <div class="input-group w-100" id="btnGroupAddon">
+                        <a class="nav-link bg-transparent br8">
+                            <i class="fas fa-power-off"></i>
+                        </a>
+                        <div class="px-4">
+                            <RadzenCheckBox @bind-Value="Habilitado" Name="estado" />
+                        </div>
+
+                    </div>
+                </div>
+
+                <br />
+                <div class="row">
+                    <div class="col">
+                        @if (Modo == 3)
+                        {
+                            <button type="submit" class="btn btn-danger w-100">
+                                Eliminar
+                                <RadzenIcon Icon="delete" />
+                            </button>
+                        }
+                        else
+                        {
+                            <button type="submit" class="btn btn-primary w-100" style="background-color:#64b4f7;">
+                                Aceptar
+                                <RadzenIcon Icon="save" />
+                            </button>
+                        }
+                    </div>
+                </div>
+                <br />
+
+            </EditForm>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public string Id { get; set; }
+    [Parameter] public int Modo { get; set; }
+
+    private string Titulo = "Empleado";
+    private string UrlRetorno = "./empleadolist";
+    private bool InProcess = true;
+    private InputText? txtIdEmpleado = new();
+    private InputText? txtNombre = new();
+    private InputText? txtIdentificacion = new();
+
+    private bool soloLectura = false;
+    public bool Habilitado { get; set; }
+
+    cEmpleado empleado = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (loginState.Empleado is null)
+        {
+            NavigationManager.NavigateTo("./");
+        }
+
+        if (String.IsNullOrEmpty(loginState.Empleado!.IdNumero))
+        {
+            NavigationManager.NavigateTo("./");
+        }
+        
+        soloLectura = Modo == 3;
+        //Modos= 1:Insertar 2:Actualizar 3:Borrar 0:Consulta
+        if (Modo != 1)
+        {
+            var empleadoGeo = await geoConnect.GetEmpleado(Id);
+
+            if (empleadoGeo is not null)
+            {
+                empleado.IdNumero = empleadoGeo.IdNumero;
+                empleado.Nombre = empleadoGeo.Nombre;
+                empleado.Identificacion = empleadoGeo.Identificacion;
+            }
+            else
+            {
+                await swal.FireAsync("Atención", "Ha ocurrido un problema al cargar el Emmpleado", SweetAlertIcon.Info);
+            }
+        }
+
+        InProcess = false;
+        StateHasChanged();
+    }
+
+    private async Task GuardarCambios()
+    {
+        InProcess = true;
+        try
+        {
+
+            if (empleado.IdNumero == "" || empleado.IdNumero is null)
+            {
+                await Utiles.SetFocus(txtIdEmpleado);
+                await swal.FireAsync("Atención", "El idEmpleado es necesario", SweetAlertIcon.Info);
+                return;
+            }
+
+            if (empleado.Nombre == "" || empleado.Nombre is null)
+            {
+                await Utiles.SetFocus(txtNombre);
+                await swal.FireAsync("Atención", "El Nombre del Empleado es necesario", SweetAlertIcon.Info);
+                return;
+            }
+
+            if (empleado.Identificacion == "" || empleado.Identificacion is null)
+            {
+                await Utiles.SetFocus(txtIdentificacion);
+                await swal.FireAsync("Atención", "La identificación del Empleado es necesario", SweetAlertIcon.Info);
+                return;
+            }
+
+
+            List<cEmpleado> listaEmpleado = new();
+            empleado.Estado = (Habilitado != null) ? 'T' : 'F';
+            listaEmpleado.Add(empleado);
+
+            EventResponse respuesta;
+
+            
+            respuesta = await geoConnect.Post("Empleado", listaEmpleado);
+           
+
+            if (respuesta.Id == "0")
+            {
+                NavigationManager.NavigateTo(UrlRetorno);
+            }
+            else
+            {
+                await swal.FireAsync("Error", respuesta.Descripcion, SweetAlertIcon.Error);
+            }
+        }
+        catch (Exception e)
+        {
+            await swal.FireAsync("Error", "Ocurrió un error al ejecutar el proceso. Detalle de Error: " + e.Message, SweetAlertIcon.Error);
+        }
+        finally
+        {
+            InProcess = false;
+        }
+    }
+
+    
+
+}

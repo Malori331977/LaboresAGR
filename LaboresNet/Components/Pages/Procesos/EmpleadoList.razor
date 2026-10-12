@@ -1,0 +1,82 @@
+﻿@page "/empleadolist"
+
+@layout MainLayout
+@using PortalEmpleadoGeotime.Client.Data.DataBaseLocal;
+
+@inject SweetAlertService swal;
+@inject IGeoTimeConnect geoConnect
+@inject NavigationManager NavigationManager
+
+
+<div class="card">
+
+    <div class="card-body">
+        <div>
+            <PageReturn Titulo="@Titulo" UrlRetorno="@UrlRetorno" />
+        </div>
+        @if (InProcess)
+        {
+            <SpinnerControl ></SpinnerControl>
+        }
+
+        <RadzenDataGrid TItem="cEmpleado" Data="@empleado"
+                        AllowFiltering="true" AllowPaging="true" PageSize="10"
+                        AllowSorting="true" FilterMode="FilterMode.SimpleWithMenu"
+                        FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive"
+                        Style="width:100%;">
+            <Columns>
+                <RadzenDataGridColumn TItem="cEmpleado" Property="IdNumero" Title="Id Numero" />
+                <RadzenDataGridColumn TItem="cEmpleado" Property="Nombre" Title="Nombre de Empleado" />
+                <RadzenDataGridColumn TItem="cEmpleado" Property="Identificacion" Title="Identificación" />
+            </Columns>
+        </RadzenDataGrid>
+    </div>
+</div>
+
+@code {
+
+    private IEnumerable<cEmpleado> empleado = new List<cEmpleado>();
+    private string Titulo = "Empleados";
+    private string UrlRetorno = "./principal";
+    private bool InProcess = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await GetEmpleado();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        await base.OnAfterRenderAsync(firstRender);
+    }
+
+    /* Metodo para traer los empleados de geotime y validar si esta activo en BYC Labores*/
+    private async Task GetEmpleado()
+    {
+        if (loginState.Empleado is null)
+        {
+            NavigationManager.NavigateTo("./");
+        }
+
+        if (String.IsNullOrEmpty(loginState.Empleado!.IdNumero))
+        {
+            NavigationManager.NavigateTo("./");
+        }
+
+        List<cEmpleado> empleados = new();
+        try
+        {
+            MarcasDBLocal marcaDBLocal = new();
+            empleados = await marcaDBLocal.GetEmpleadoAsync();
+        }
+        catch (Exception e)
+        {
+            await swal.FireAsync("Error", "Al cargar los empleados." + e.Message, SweetAlertIcon.Info);
+        }
+
+        empleado = empleados;
+        InProcess = false;
+        StateHasChanged();
+    }
+
+}

@@ -1,0 +1,52 @@
+@inject NavigationManager NavigationManager
+
+<div class="card-header">
+    <div class="row">
+        <div class="col-1 text-start d-flex align-items-center gap-2">
+
+            @if (!isAndroidOriOS)
+            {
+                <button class="btn btn-sm btn-secondary rounded-circle" @onclick="async () => await OnClickRetorno()">
+                    <RadzenIcon Icon="arrow_back" />
+                </button>
+            }
+
+            <button class="btn btn-sm btn-secondary rounded-circle" @onclick="async () => await OnClickAdd()">
+                <RadzenIcon Icon="add" />
+            </button>
+        </div>
+        <div class="col text-center">
+            <h3>@Titulo</h3>
+        </div>
+        <div class="col-1 text-end">
+
+        </div>
+    </div>
+
+</div>
+
+@code {
+    [Parameter]
+    public string Titulo { get; set; }
+
+    [Parameter]
+    public string UrlRetorno { get; set; }
+
+    [Parameter]
+    public EventCallback<string> OnClickAddSelected { get; set; }
+
+    private bool isAndroidOriOS = DeviceInfo.Platform == DevicePlatform.Android || DeviceInfo.Platform == DevicePlatform.iOS;
+
+    private async Task OnClickAdd()
+    {
+        await OnClickAddSelected.InvokeAsync();
+    }
+    private async Task OnClickRetorno()
+    {
+        NavigationManager.NavigateTo(UrlRetorno);
+
+    }
+
+}
+
+

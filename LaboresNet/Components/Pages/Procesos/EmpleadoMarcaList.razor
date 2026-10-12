@@ -1,0 +1,656 @@
+﻿@page "/empleadomarcalist"
+@layout MainLayout
+@using PortalEmpleadoGeotime.Client.Data.DataBaseLocal;
+
+<div class="card">
+    <PageReturn Titulo="@Titulo" UrlRetorno="@UrlRetorno" />
+    <div class="card-body">
+        @if (InProcess)
+        {
+            <SpinnerControl></SpinnerControl>
+
+        }
+       
+        <div class="ibm-plex-serif-bold">
+            <RadzenPanel AllowCollapse="true" class="panel-brand" Style="margin-bottom:0.5rem;">
+                <HeaderTemplate>
+                    <RadzenIcon Icon="groups" class="me-1" /> Lista de Empleados Asignados
+                </HeaderTemplate>
+                <ChildContent>
+                    @if (showCameraSelector)
+                    {
+                        <div class="d-flex align-items-center gap-2 mb-2 px-1">
+                            <RadzenIcon Icon="videocam" Style="flex-shrink:0;" />
+                            <RadzenDropDown @bind-Value="selectedCameraId"
+                                            Data="@cameras"
+                                            TextProperty="Label"
+                                            ValueProperty="DeviceId"
+                                            Style="flex:1; font-size:small;"
+                                            Change="@OnCameraChanged" />
+                        </div>
+                    }
+                    @if (empleado is not null)
+                    {
+                        <RadzenDataGrid @ref="grid" Render="@OnRender" class="rz-border-radius-2"
+                                        PageSizeOptions="@Utiles.PageSizeOptions()"
+                                        TItem="EmpleadoExt"
+                                        AllowFiltering="true"
+                                        AllowColumnResize="true"
+                                        FilterMode="FilterMode.SimpleWithMenu"
+                                        PageSize="10"
+                                        AllowPaging="true"
+                                        AllowSorting="true"
+                                        AllowMultiColumnSorting="true"
+                                        ShowMultiColumnSortingIndex="true"
+                                        Data="@empleado"
+                                        ColumnWidth="300px"
+                                        FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive"
+                                        FilterCleared=@FilterCleared
+                                        SelectionMode="DataGridSelectionMode.Single"
+                                        LogicalFilterOperator="LogicalFilterOperator.Or"
+                                        FilterPopupRenderMode="PopupRenderMode.OnDemand"
+                                        AllowColumnPicking="false"
+                                        AllowColumnReorder="true"
+                                        RowRender="@RowRender"
+                                        PagerHorizontalAlign="HorizontalAlign.Center"
+                                        ShowPagingSummary="true"
+                                        Page="@OnPage"
+                                        ColumnReordering="@OnColumnReordering">
+
+                            <PagingSummaryTemplate>
+                                <RadzenIcon Icon="database" Style="color: var(--rz-primary); font-size: var(--rz-pager-summary-font-size);" />
+                                Mostrando pagina @context.CurrentPage De @context.NumberOfPages <b>(Total @context.TotalCount records)</b>
+                            </PagingSummaryTemplate>
+                            <Columns>
+                                <RadzenDataGridColumn TItem="EmpleadoExt" Property="Nombre" Title="Empleados" Width="120px">
+                                    <Template Context="empleado">
+                                        <div style="display:flex;gap:10px;align-items:flex-start;padding:4px 0;">
+                                            <div class="emp-avatar">
+                                                @(string.IsNullOrEmpty(empleado.Nombre) ? "?" : empleado.Nombre.Substring(0,1).ToUpper())
+                                            </div>
+                                            <div style="flex:1;min-width:0;">
+                                                <div style="font-weight:700;font-size:0.9rem;color:#212121;line-height:1.3;margin-bottom:1px;">@empleado.Nombre</div>
+                                                <div style="font-size:0.7rem;color:#999;font-variant-numeric:tabular-nums;margin-bottom:6px;">@empleado.IdNumero</div>
+                                                @if (!string.IsNullOrEmpty(empleado.DescGrupo))
+                                                {
+                                                    <div class="emp-meta-row">
+                                                        <RadzenIcon Icon="group" Style="font-size:0.85rem;color:#bbb;flex-shrink:0;" />
+                                                        @empleado.IdGrupo @empleado.DescGrupo
+                                                    </div>
+                                                }
+                                                @if (!string.IsNullOrEmpty(empleado.DescDepartamento))
+                                                {
+                                                    <div class="emp-meta-row">
+                                                        <RadzenIcon Icon="apartment" Style="font-size:0.85rem;color:#bbb;flex-shrink:0;" />
+                                                        @empleado.IdDepartamento @empleado.DescDepartamento
+                                                    </div>
+                                                }
+                                                @if (!string.IsNullOrEmpty(empleado.DescCentroCosto))
+                                                {
+                                                    <div class="emp-meta-row">
+                                                        <RadzenIcon Icon="account_balance" Style="font-size:0.85rem;color:#bbb;flex-shrink:0;" />
+                                                        CC: @empleado.IdCCosto - @empleado.DescCentroCosto
+                                                    </div>
+                                                }
+                                                <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
+                                                    @if (empleado.entrada != "00:00")
+                                                    {
+                                                        <div class="time-chip done entrada">
+                                                            <RadzenIcon Icon="login" class="chip-icon" Style="color:#1a76cb;" />
+                                                            <span class="chip-label" style="color:#1a76cb;">Entrada</span>
+                                                            <span class="chip-time">@empleado.entrada</span>
+                                                        </div>
+                                                    }
+                                                    else
+                                                    {
+                                                        <button class="time-chip entrada" @onclick='() => RegistrarMarca(1, empleado)' @onclick:stopPropagation="true">
+                                                            <RadzenIcon Icon="login" class="chip-icon" Style="color:#1a76cb;" />
+                                                            <span class="chip-label" style="color:#1a76cb;">Entrada</span>
+                                                            <span class="chip-time" style="color:#ccc;">--:--</span>
+                                                        </button>
+                                                    }
+                                                    @if (empleado.descanso != "00:00")
+                                                    {
+                                                        <div class="time-chip done descanso">
+                                                            <RadzenIcon Icon="restaurant" class="chip-icon" Style="color:#f57c00;" />
+                                                            <span class="chip-label" style="color:#f57c00;">Descanso</span>
+                                                            <span class="chip-time">@empleado.descanso</span>
+                                                        </div>
+                                                    }
+                                                    else
+                                                    {
+                                                        <button class="time-chip descanso" @onclick='() => RegistrarMarca(3, empleado)' @onclick:stopPropagation="true">
+                                                            <RadzenIcon Icon="restaurant" class="chip-icon" Style="color:#f57c00;" />
+                                                            <span class="chip-label" style="color:#f57c00;">Descanso</span>
+                                                            <span class="chip-time" style="color:#ccc;">--:--</span>
+                                                        </button>
+                                                    }
+                                                    @if (empleado.salida != "00:00")
+                                                    {
+                                                        <div class="time-chip done salida">
+                                                            <RadzenIcon Icon="logout" class="chip-icon" Style="color:#c62828;" />
+                                                            <span class="chip-label" style="color:#c62828;">Salida</span>
+                                                            <span class="chip-time">@empleado.salida</span>
+                                                        </div>
+                                                    }
+                                                    else
+                                                    {
+                                                        <button class="time-chip salida" @onclick='() => RegistrarMarca(2, empleado)' @onclick:stopPropagation="true">
+                                                            <RadzenIcon Icon="logout" class="chip-icon" Style="color:#c62828;" />
+                                                            <span class="chip-label" style="color:#c62828;">Salida</span>
+                                                            <span class="chip-time" style="color:#ccc;">--:--</span>
+                                                        </button>
+                                                    }
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </Template>
+                                </RadzenDataGridColumn>
+                            </Columns>
+                        </RadzenDataGrid>
+                    }
+
+                </ChildContent>
+            </RadzenPanel >
+            @if (portal_Config!.USARGEOLOCALIZACION && mapsInitialized && latitud > 0)
+            {
+                <RadzenPanel AllowCollapse="true" class="panel-brand" Style="margin-bottom:0.5rem;">
+                    <HeaderTemplate>
+                        <RadzenIcon Icon="location_on" class="me-1" /> Ubicación
+                    </HeaderTemplate>
+                    <ChildContent>
+                        <div id="googleMapContainer" style="width:100%;height:400px">
+                        </div>
+                    </ChildContent>
+                </RadzenPanel>
+            }
+        </div>
+
+       
+
+    </div>
+</div>
+
+@code {
+
+    RadzenDataGrid<EmpleadoExt> grid = new();
+    private IEnumerable<EmpleadoExt>? empleado = null;
+    private string UrlRetorno = "./principal";
+    EmpleadoExt empleados = new();
+    private string Titulo = "Registro de Marcas Grupal";
+    private bool InProcess = true;
+    string coordenadas = "";
+    double latitud = 0;
+    double longitud = 0;
+    private int TipoMarcaGlobal = 0;
+    bool sincronizar = false;
+    bool mapsInitialized = false;
+    private string? dirIp = "";
+
+    // Camera selection
+    public class CameraInfo
+    {
+        [System.Text.Json.Serialization.JsonPropertyName("deviceId")]
+        public string DeviceId { get; set; } = "";
+        [System.Text.Json.Serialization.JsonPropertyName("label")]
+        public string Label { get; set; } = "";
+    }
+    private List<CameraInfo> cameras = new();
+    private string selectedCameraId = "";
+    private bool showCameraSelector = false;
+    List<MapMarker> markers = new();
+    cPortal_Config? portal_Config = new cPortal_Config
+    {
+        USARECONOCIMIENTOFACIAL = false,
+        USARGEOLOCALIZACION = false,
+    };
+    MarcasDBLocal marcaDBLocal = new();
+    cEmpleado empleadoSeleccionado = new();
+    IEnumerable<cEmpleado>? empleadosTotal;
+    cPh_Usuario? phUsuario;
+    List<int> grupoIds = new();
+
+    private async Task UpdateMapFromDataAsync()
+    {
+        try
+        {
+            // preparar estructura de markers para JS
+            var jsMarkers = markers.Select(m => new { lat = m.Lat, lng = m.Lng, title = m.Title }).ToArray();
+
+            // Llamar al helper JS que crea/actualiza el mapa nativo
+            await JsRuntime.InvokeVoidAsync("mapInterop.createOrUpdateMap", "googleMapContainer", latitud, longitud, jsMarkers, 8);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("UpdateMapFromDataAsync error: " + ex.Message);
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { 
+            sincronizar = await geoConnect.ApiDisponible();
+            await Inicializa();
+            await GetData();
+            dirIp = await geoConnect.GetPublicIpAsync();
+
+            if (string.IsNullOrEmpty(dirIp))
+            {
+                dirIp = await geoConnect.GetServerIpAsync();
+            }
+        }
+        catch (Exception e)
+        {
+            await swal.FireAsync("Error", $"Error al cargar Registros de Marcas.  Detalle de error: {e.Message}", SweetAlertIcon.Info);
+        }
+
+    }
+
+    private async Task Inicializa()
+    {
+        
+        empleadosTotal = await marcaDBLocal.GetEmpleadoAsync();
+        phUsuario = loginState.PhUsuario!;
+        
+    }
+
+    private async Task<Location?> GetLocationAsync()
+    {
+        var status = await Permissions.CheckStatusAsync<Permissions.LocationWhenInUse>();
+        if (status != PermissionStatus.Granted)
+            status = await Permissions.RequestAsync<Permissions.LocationWhenInUse>();
+
+        if (status != PermissionStatus.Granted)
+            return null; // permiso denegado
+
+        try
+        {
+            var request = new GeolocationRequest(GeolocationAccuracy.Best, TimeSpan.FromSeconds(10));
+            var location = await Geolocation.Default.GetLocationAsync(request);
+            return location;
+        }
+        catch (Exception ex)
+        {
+            // manejar Timeouts, falta de GPS, etc.
+            return null;
+        }
+    }
+
+    private TimeZoneInfo GetTimeZoneByOffset(int offsetHours)
+    {
+        var allZones = TimeZoneInfo.GetSystemTimeZones();
+        return allZones.FirstOrDefault(z => z.BaseUtcOffset.Hours == offsetHours)!;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                if (sincronizar)
+                {
+                    portal_Config = await geoConnect.GetPortalConfig();
+                }
+                else
+                {
+                    portal_Config = await marcaDBLocal.GetPortalConfigAsync();
+                }
+
+                // Cargar lista de cámaras disponibles
+                var camList = await JsRuntime.InvokeAsync<List<CameraInfo>>("getCameras");
+                if (camList is not null && camList.Count > 1)
+                {
+                    cameras = camList;
+                    var savedId = await JsRuntime.InvokeAsync<string?>("loadPreferredCamera");
+                    if (!string.IsNullOrEmpty(savedId) && cameras.Any(c => c.DeviceId == savedId))
+                        selectedCameraId = savedId;
+                    else
+                    {
+                        selectedCameraId = cameras[0].DeviceId;
+                        await JsRuntime.InvokeVoidAsync("setPreferredCamera", selectedCameraId);
+                    }
+                    showCameraSelector = true;
+                    StateHasChanged();
+                }
+
+                if (portal_Config!.USARGEOLOCALIZACION)
+                {
+                    // esperar a que la API esté cargada
+                    await JsRuntime.InvokeAsync<System.Text.Json.JsonElement>("initGoogleMaps", portal_Config.MAPAPIKEY);
+                    mapsInitialized = true;
+
+                    var coordenadasGPS = await GetLocationAsync();
+
+                    if (coordenadasGPS is not null)
+                    {
+                        latitud = coordenadasGPS.Latitude;
+                        longitud = coordenadasGPS.Longitude;
+
+                        markers = new()
+                        {
+                            new MapMarker
+                            {
+                                Lat = latitud,
+                                Lng = longitud,
+                                Title = "Tu posición actual",
+                            },
+                        };
+
+                        //
+                        await InvokeAsync(StateHasChanged);   // asegura que el div #googleMapContainer exista
+                        await Task.Delay(50); // dar un pequeño margen para el DOM
+                        await UpdateMapFromDataAsync();
+
+                    }
+                    else
+                    {
+                        latitud = 0;
+                        longitud = 0;
+                    }
+
+
+                }
+            }
+            catch (Exception e)
+            {
+                await swal.FireAsync("Error", $"Error al cargar la pagina.  Detalle de error: {e.Message}", SweetAlertIcon.Info);
+            }
+        }
+    }
+
+    // Metodo para traer los empleados de geotime y validar si esta activo en BYC Labores
+    private async Task GetData()
+    {
+        if (loginState.Empleado is null)
+        {
+            NavigationManager.NavigateTo("./");
+        }
+
+        if (String.IsNullOrEmpty(loginState.Empleado!.IdNumero))
+        {
+            NavigationManager.NavigateTo("./");
+        }
+
+        InProcess = true;
+        StateHasChanged();
+        try
+        {
+
+            empleado = new List<EmpleadoExt>();
+            IEnumerable<cMarca>? marcasDelDia=null;
+            
+            if (phUsuario is not null)
+            {
+                
+                grupoIds = phUsuario.GRUPOS!.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                                    .Select(g => int.Parse(g.Trim()))
+                                    .ToList();
+
+                empleadosTotal = from e in empleadosTotal
+                            join g in grupoIds on e.IdGrupo equals g
+                            select e;
+
+                if (sincronizar)
+                    marcasDelDia = await geoConnect.GetMarcaDiariaByGrupoTotal(phUsuario.GRUPOS!, DateTime.Now.ToString("yyyyMMdd"));
+                else
+                    marcasDelDia = (from m in await marcaDBLocal.GetMarcaIn(DateTime.Now)
+                                   select new cMarca
+                                   {
+                                       fecha = (DateTime)m.fecha!,
+                                       hora = m.hora,
+                                       idterminal = m.idterminal,
+                                       tipo = (int)m.tipo!,
+                                       idplanilla = m.idplanilla,
+                                       idnumero = m.idnumero,
+                                       estado =  m.estado.ToString(),
+                                       fecha_reg = m.fecha_reg,
+                                       long_reg = m.long_reg,
+                                       lat_reg = m.lat_reg,
+                                       imagen_reg = m.imagen_reg,
+                                       gps_cell = m.gps_cell,
+                                       dir_ip = m.dir_ip,
+                                   }).ToList();
+
+                if (marcasDelDia is null)
+                {
+                    marcasDelDia = new List<cMarca>();
+                }
+
+
+                if (empleadosTotal is not null)
+                {
+                    //empleadosExt = (from e in empleados select new EmpleadoExt
+                    var empleadosExt = empleadosTotal!.Select(e => new EmpleadoExt
+                    {
+                        IdNumero = e.IdNumero,
+                        IdPlanilla = e.IdPlanilla,
+                        Nombre = e.Nombre,
+                        Estado = e.Estado,
+                        Departamento = e.Departamento == null ? null :
+                                            new cDepartamento
+                                            {
+                                                IDDEPART = e.Departamento.IDDEPART,
+                                                DESCRIPCION = e.Departamento.DESCRIPCION,
+                                            },
+                        CentroCosto = e.CentroCosto == null ? null :
+                                            new cCentroCosto
+                                            {
+                                                IdCCosto = e.CentroCosto.IdCCosto,
+                                                Descripcion = e.CentroCosto.Descripcion,
+                                                Distribuye = e.CentroCosto.Distribuye,
+                                            },
+                        Ph_Planilla = e.Ph_Planilla == null ? null :
+                                                new cPh_Planilla
+                                                {
+                                                    idplanilla = e.Ph_Planilla.idplanilla,
+                                                    planilla = e.Ph_Planilla.planilla,
+                                                },
+                        DescDepartamento = e.Departamento == null ? "" : e.Departamento.DESCRIPCION,
+                        DescCentroCosto = e.CentroCosto == null ? "" : e.CentroCosto.Descripcion,
+                        DescPlanilla = e.Ph_Planilla == null ? "" : e.Ph_Planilla.planilla,
+                        DescGrupo = e.Ph_Grupo == null ? "" : e.Ph_Grupo.descripcion,
+                        entrada = marcasDelDia.Where(m => m.idnumero == e.IdNumero && m.tipo == 1).Select(m => m.hora).FirstOrDefault()! ?? "00:00",
+                        salida = marcasDelDia.Where(m => m.idnumero == e.IdNumero && m.tipo == 2).Select(m => m.hora).FirstOrDefault()! ?? "00:00",
+                        descanso = marcasDelDia.Where(m => m.idnumero == e.IdNumero && m.tipo == 3).OrderByDescending(e => e.fecha_reg).Select(m => m.hora).FirstOrDefault()! ?? "00:00",
+
+                    });
+                    empleado = empleadosExt.ToList();
+                }
+            }
+
+            
+
+        }
+        catch (Exception e)
+        {
+
+            await swal.FireAsync("Atención", "Error al cargar la lista de empleados." + e.Message, SweetAlertIcon.Error);
+        }
+        InProcess = false;
+        StateHasChanged();
+    }
+
+    private async Task GuardarMarca(int tipoMarca)
+    {
+        List<cMarcaIn> listMarcaIn = new();
+        var coords = coordenadas.Split("|");
+        string latitud = "";
+        string longitud = "";
+
+        if (coords.Count() > 1)
+        {
+            latitud = coords[0];
+            longitud = coords[1];
+        }
+
+        var tz = GetTimeZoneByOffset(loginState.TimeZone);
+
+        string zonaHorariaSeleccionada = tz.Id;
+        string horaMarcaZH = "";
+        if (!string.IsNullOrEmpty(zonaHorariaSeleccionada))
+        {
+            var utcNow = DateTime.UtcNow;
+            var zona = TimeZoneInfo.FindSystemTimeZoneById(zonaHorariaSeleccionada);
+            var horaLocal = TimeZoneInfo.ConvertTimeFromUtc(utcNow, zona);
+            horaMarcaZH = horaLocal.ToString("HH:mm");
+        }
+        else
+        {
+            horaMarcaZH = DateTime.Now.ToString("HH:mm");
+        }
+
+
+
+
+        cMarcaIn marcaIn = new cMarcaIn
+        {
+            idtarjeta = empleadoSeleccionado.Tarjeta,
+            fecha = DateTime.Parse(DateTime.Now.ToString("yyyy-MM-dd")),
+            hora = horaMarcaZH,
+            idterminal = "WPE",
+            tipo = tipoMarca,
+            idplanilla = empleadoSeleccionado.IdPlanilla,
+            idnumero = empleadoSeleccionado.IdNumero,
+            estado = 'N',
+            fecha_reg = DateTime.Now,
+            long_reg = longitud,
+            lat_reg = latitud,
+            imagen_reg = null,
+            gps_cell = null,
+            host = dirIp,
+            dir_ip = dirIp,
+        };
+        listMarcaIn.Add(marcaIn);
+
+
+
+        if (sincronizar)
+        {
+            var respuesta = await geoConnect.Post("MarcaIn", listMarcaIn);
+            if (respuesta.Id == "0")
+            {
+                await swal.FireAsync("Felicidades", $"La marca de {Utiles.GetTipoMarca(tipoMarca)} se realizó con exito", SweetAlertIcon.Success);
+            }
+            else
+            {
+                sincronizar = false;
+                await swal.FireAsync("Error", respuesta.Descripcion, SweetAlertIcon.Error);
+            }
+        }
+        else
+        {
+            await swal.FireAsync("Atención", "Actualmente no existe conexión con la base de datos. La marca se guardará de forma local para su posterior sincronización.", SweetAlertIcon.Warning);
+        }
+
+        foreach (var marca in listMarcaIn)
+        {
+            marca.estado = sincronizar ? 'S' : 'N';
+            var resp = await marcaDBLocal.SaveMarcaInAsync(marca);
+
+        }
+
+        await GetData(); 
+
+    }
+
+    private async void RegistrarMarca(int tipoMarca, cEmpleado emp)
+    {
+        try
+        {
+            empleadoSeleccionado = emp;
+            if (portal_Config!.USARGEOLOCALIZACION && portal_Config!.LOCALIZACIONREQ && latitud == 0 && longitud == 0)
+            {
+                await swal.FireAsync("Error", "La geolocalización es requerida, actualmente el sistema no puede determinar la ubicación y por tanto no se puede realizar la marca. Por favor verifique que haya dado los permisos correspondientes al sitio web.", SweetAlertIcon.Error);
+                return;
+            }
+
+            if (portal_Config!.USARECONOCIMIENTOFACIAL)
+            {
+                TipoMarcaGlobal = tipoMarca;
+                await IniciarReconocimiento();
+            }
+            else
+                await GuardarMarca(tipoMarca);
+
+        }
+        catch (Exception e)
+        {
+            await swal.FireAsync("Error", "Error guardar el registro de marca", SweetAlertIcon.Error);
+        }
+
+    }
+
+    private async Task IniciarReconocimiento()
+    {
+        await dialogService.OpenAsync<MarcaPop>("Reconociendo el Rostro",
+             new Dictionary<string, object>()
+               {
+                    { "OnReconocimiento", EventCallback.Factory.Create<int>(this, HideModalRostro) },
+                    { "EmpleadoId", empleadoSeleccionado.IdNumero! }
+               },
+             new DialogOptions()
+             {
+                 Resizable = false,
+                 Draggable = false,
+                 Width = "310px",
+                 Height = "400px",
+             });
+
+    }
+
+    private async Task HideModalRostro(int EsReconocido)
+    {
+        dialogService.Close(true);
+
+        switch (EsReconocido)
+        {
+            case 0:
+                await swal.FireAsync("Error", "No fue posible reconocer su rostro. La marca no se ha realizado.  Intente nuevamente acercando su rostro más hacia la cámara.", SweetAlertIcon.Error);
+                break;
+            case 1:
+                await GuardarMarca(TipoMarcaGlobal);
+                break;
+            case 2:
+                await swal.FireAsync("Error", "Su rostro no ha sido registrado en la base de datos. Por favor contacte al administrador.", SweetAlertIcon.Error);
+                break;
+        }
+
+    }
+
+    private async Task OnCameraChanged(object value)
+    {
+        selectedCameraId = value?.ToString() ?? "";
+        await JsRuntime.InvokeVoidAsync("setPreferredCamera", selectedCameraId);
+    }
+
+    async Task FilterCleared()
+    {
+
+    }
+
+    void OnRender(DataGridRenderEventArgs<EmpleadoExt> args)
+    {
+        if (args.FirstRender)
+        {
+            args.Grid!.Sorts.Add(new SortDescriptor() { Property = "Filtro", SortOrder = SortOrder.Ascending });
+
+        }
+    }
+
+    void RowRender(RowRenderEventArgs<EmpleadoExt> args)
+    {
+    }
+    void OnPage(PagerEventArgs args)
+    {
+    }
+
+    void OnColumnReordering(DataGridColumnReorderingEventArgs<EmpleadoExt> args)
+    {
+        if (args.ToColumn!.Property == nameof(EmpleadoExt.IdNumero))
+        {
+            args.Cancel = true;
+        }
+    }
+
+}
