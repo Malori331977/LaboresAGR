@@ -174,6 +174,14 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
 
                 database.CreateTableAsync<FiltroUsuarioLocal>().Wait();
 
+                database.ExecuteAsync(@"CREATE TABLE IF NOT EXISTS MigracionLabores (
+                    Id    INTEGER NOT NULL,
+                    Fecha TEXT    NOT NULL,
+                    PRIMARY KEY (Id)
+                );").Wait();
+
+                MigrarDesdeBaseAnterior();
+
             }
             catch(Exception e)
             {
@@ -282,6 +290,87 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
                 db.InsertAll(lUnidades);
                 db.InsertAll(lRecursos);
             });
+        }
+
+        /// <summary>
+        /// Copia, una sola vez, desde la base anterior (AvancesMoDB\LaboresDatabase.db3, solo lectura):
+        /// la configuración de las APIs y las labores auxiliares no finalizadas (EstadoId distinto de 2 y 99).
+        /// Cada paso es tolerante: la base anterior puede no existir o ser de otra aplicación.
+        /// </summary>
+        private void MigrarDesdeBaseAnterior()
+        {
+            try
+            {
+                var yaMigrado = database.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM MigracionLabores WHERE Id = 1").Result;
+                if (yaMigrado > 0) return;
+
+                string rutaAnterior = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "AvancesMoDB", "LaboresDatabase.db3");
+
+                if (File.Exists(rutaAnterior))
+                {
+                    try
+                    {
+                        using var anterior = new SQLiteConnection(rutaAnterior, SQLiteOpenFlags.ReadOnly);
+
+                        bool Existe(string tabla) =>
+                            anterior.ExecuteScalar<int>("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?", tabla) > 0;
+
+                        // 1. Configuración de las APIs (la tabla de esta clase es "ParametroApi").
+                        if (Existe("ParametroApi"))
+                        {
+                            var cfg = anterior.Query<cParametroApiLocal>("SELECT * FROM ParametroApi WHERE Id = 1").FirstOrDefault();
+                            var yaTiene = database.Table<cParametroApiLocal>().FirstOrDefaultAsync(p => p.Id == 1).Result;
+                            if (cfg is not null && yaTiene is null)
+                                database.InsertAsync(cfg).Wait();
+                        }
+
+                        // 2. Labores auxiliares no finalizadas y sus detalles.
+                        if (Existe("GeoAgrLaborAuxiliar") && Existe("GeoAgrLaborAuxiliarDet"))
+                        {
+                            var encabezados = anterior.Query<GeoAgrLaborAuxiliarLocal>(
+                                "SELECT * FROM GeoAgrLaborAuxiliar WHERE EstadoId NOT IN (2, 99)");
+                            var detalles = anterior.Query<GeoAgrLaborAuxiliarDetLocal>(
+                                @"SELECT d.* FROM GeoAgrLaborAuxiliarDet d
+                                  JOIN GeoAgrLaborAuxiliar h ON h.IdRegistro = d.IdRegistro
+                                  WHERE h.EstadoId NOT IN (2, 99)");
+
+                            database.RunInTransactionAsync(db =>
+                            {
+                                foreach (var h in encabezados)
+                                    db.Execute(
+                                        "INSERT OR IGNORE INTO GeoAgrLaborAuxiliar (IdRegistro, IdEmpleado, Fecha, Comentarios, EstadoId) VALUES (?,?,?,?,?)",
+                                        h.IdRegistro, h.IdEmpleado, h.Fecha, h.Comentarios, h.EstadoId);
+
+                                foreach (var d in detalles)
+                                    db.Execute(
+                                        @"INSERT OR IGNORE INTO GeoAgrLaborAuxiliarDet
+                                          (IdRegistro, IdEmpleado, Fecha, Item, Bloque, Finca, Lote, Ot, Labor, Recurso,
+                                           CantidadRendimiento, Unidad, HorasAprobadas, EstadoId, IdEmpleadoAsignado)
+                                          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                                        d.IdRegistro, d.IdEmpleado, d.Fecha, d.Item, d.Bloque, d.Finca, d.Lote, d.Ot,
+                                        d.Labor, d.Recurso, d.CantidadRendimiento, d.Unidad, d.HorasAprobadas,
+                                        d.EstadoId, d.IdEmpleadoAsignado);
+                            }).Wait();
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        // Base anterior bloqueada, corrupta o con otro esquema: se continúa con tablas vacías.
+                        Console.WriteLine($"MigrarDesdeBaseAnterior: {e.Message}");
+                    }
+                }
+
+                database.ExecuteAsync(
+                    "INSERT OR REPLACE INTO MigracionLabores (Id, Fecha) VALUES (1, ?)",
+                    DateTime.Now.ToString("yyyyMMddHHmmss")).Wait();
+            }
+            catch (Exception e)
+            {
+                // Nunca debe impedir el arranque de la app.
+                Console.WriteLine($"MigrarDesdeBaseAnterior (control): {e.Message}");
+            }
         }
 
         private cEmpleado MapEmpleadoLocalToEmpleado(cEmpleadoLocal l)
