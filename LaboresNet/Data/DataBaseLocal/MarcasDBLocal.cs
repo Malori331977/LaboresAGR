@@ -4,7 +4,6 @@ using PortalEmpleadoGeotime.Client.Modelo;
 using SQLite;
 using System.Linq;
 using System.Runtime.CompilerServices;
-using TicoFrutLibs.Models;
 
 
 namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
@@ -2750,8 +2749,6 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
                 ApiClientId = l.ApiClientId,
                 ApiUser = l.ApiUser,
                 ApiPassword = l.ApiPassword,
-                ApiAuxiliarSchema = l.ApiAuxiliarSchema,
-                ApiAuxiliarUrl = l.ApiAuxiliarUrl,
             };
         }
 
@@ -2770,8 +2767,6 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
                     model.ApiClientId = parametro.ApiClientId;
                     model.ApiUser = parametro.ApiUser;
                     model.ApiPassword = parametro.ApiPassword;
-                    model.ApiAuxiliarSchema = parametro.ApiAuxiliarSchema;
-                    model.ApiAuxiliarUrl = parametro.ApiAuxiliarUrl;
 
                     return await database.UpdateAsync(model);
                 }
@@ -2788,7 +2783,7 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
         }
 
         // ════════════════════════════════════════════════════════════════════════
-        // TicoFrut — GeoAgrLaborAuxiliar
+        // GeoAgrLaborAuxiliar
         // ════════════════════════════════════════════════════════════════════════
 
         private static GeoAgrLaborAuxiliar MapLocalToAuxiliar(GeoAgrLaborAuxiliarLocal l) =>
@@ -3073,7 +3068,7 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
             };
 
         // ════════════════════════════════════════════════════════════════════════
-        // TicoFrut — GeoAgrLaborAuxiliar  (métodos por IdRegistro)
+        // GeoAgrLaborAuxiliar  (métodos por IdRegistro)
         // ════════════════════════════════════════════════════════════════════════
 
         /// <summary>Devuelve la lista raw (con IdRegistro) de todas las labores auxiliares.</summary>

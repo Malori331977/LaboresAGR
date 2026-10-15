@@ -325,8 +325,6 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
         public string ApiClientId { get; set; } = "";
         public string ApiUser { get; set; } = "";
         public string ApiPassword { get; set; } = "";
-        public string ApiAuxiliarUrl { get; set; } = "";
-        public string ApiAuxiliarSchema { get; set; } = "";
     }
 
     // ─── Catálogos de labores (Ph_Labores*) ─────────────────────────────────────
@@ -391,7 +389,7 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
         public string UnidadId { get; set; } = "";
     }
 
-    // ─── TicoFrut local entities ────────────────────────────────────────────────
+    // Entidades locales de labor auxiliar
     // Las PKs son compuestas; las tablas se crean con SQL raw en MarcasDBLocal.
 
     [Table("GeoAgrLaborAuxiliar")]
