@@ -329,6 +329,68 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
         public string ApiAuxiliarSchema { get; set; } = "";
     }
 
+    // ─── Catálogos de labores (Ph_Labores*) ─────────────────────────────────────
+    // Las PKs son compuestas; las tablas se crean con SQL raw en MarcasDBLocal.
+
+    [Table("LaboresBloque")]
+    public class LaboresBloqueLocal
+    {
+        public string Id { get; set; } = "";
+        public string? Descripcion { get; set; }
+    }
+
+    [Table("LaboresFinca")]
+    public class LaboresFincaLocal
+    {
+        public string BloqueId { get; set; } = "";
+        public string Id { get; set; } = "";
+        public string? Descripcion { get; set; }
+    }
+
+    [Table("LaboresLote")]
+    public class LaboresLoteLocal
+    {
+        public string BloqueId { get; set; } = "";
+        public string FincaId { get; set; } = "";
+        public string Id { get; set; } = "";
+        public string? Descripcion { get; set; }
+    }
+
+    [Table("LaboresOrdenTrabajo")]
+    public class LaboresOrdenTrabajoLocal
+    {
+        public string BloqueId { get; set; } = "";
+        public string FincaId { get; set; } = "";
+        public string Id { get; set; } = "";
+        public string? Descripcion { get; set; }
+    }
+
+    [Table("LaboresActividad")]
+    public class LaboresActividadLocal
+    {
+        public string BloqueId { get; set; } = "";
+        public string FincaId { get; set; } = "";
+        public string OrdenTrabajoId { get; set; } = "";
+        public string Id { get; set; } = "";
+        public string? Descripcion { get; set; }
+    }
+
+    [Table("LaboresUnidad")]
+    public class LaboresUnidadLocal
+    {
+        public string Id { get; set; } = "";
+        public string? Descripcion { get; set; }
+    }
+
+    [Table("LaboresRecurso")]
+    public class LaboresRecursoLocal
+    {
+        public string Id { get; set; } = "";
+        public string? Descripcion { get; set; }
+        public int IdConcepto { get; set; }
+        public string UnidadId { get; set; } = "";
+    }
+
     // ─── TicoFrut local entities ────────────────────────────────────────────────
     // Las PKs son compuestas; las tablas se crean con SQL raw en MarcasDBLocal.
 

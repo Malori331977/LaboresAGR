@@ -12,15 +12,18 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
     public class MarcasDBLocal
     {
         public static MarcasDBLocal instance;
+
+        /// <summary>Nombre de la base local (carpeta y archivo .db3). Distinto de la base anterior "AvancesMoDB\LaboresDatabase.db3".</summary>
+        public const string NombreBaseLocal = "LaboresAGR";
         readonly SQLiteAsyncConnection database;
 
         public MarcasDBLocal()
         {
             try
             {
-                string dbFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AvancesMoDB");
+                string dbFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), NombreBaseLocal);
                 Directory.CreateDirectory(dbFolder);
-                string dbPath = Path.Combine(dbFolder, "LaboresDatabase.db3");
+                string dbPath = Path.Combine(dbFolder, $"{NombreBaseLocal}.db3");
 
                 database = new SQLiteAsyncConnection(dbPath);
                 // Use local table definitions that store single-char values as string
@@ -69,6 +72,59 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
                     ID INT NOT NULL,
                     DESCRIPCION TEXT NOT NULL,
                     PRIMARY KEY (ID)
+                );").Wait();
+
+                // ── Catálogos de labores (Geotime: Ph_Labores*) ─────────────────
+                database.ExecuteAsync(@"CREATE TABLE IF NOT EXISTS LaboresBloque (
+                    Id          TEXT NOT NULL,
+                    Descripcion TEXT,
+                    PRIMARY KEY (Id)
+                );").Wait();
+
+                database.ExecuteAsync(@"CREATE TABLE IF NOT EXISTS LaboresFinca (
+                    BloqueId    TEXT NOT NULL,
+                    Id          TEXT NOT NULL,
+                    Descripcion TEXT,
+                    PRIMARY KEY (BloqueId, Id)
+                );").Wait();
+
+                database.ExecuteAsync(@"CREATE TABLE IF NOT EXISTS LaboresLote (
+                    BloqueId    TEXT NOT NULL,
+                    FincaId     TEXT NOT NULL,
+                    Id          TEXT NOT NULL,
+                    Descripcion TEXT,
+                    PRIMARY KEY (BloqueId, FincaId, Id)
+                );").Wait();
+
+                database.ExecuteAsync(@"CREATE TABLE IF NOT EXISTS LaboresOrdenTrabajo (
+                    BloqueId    TEXT NOT NULL,
+                    FincaId     TEXT NOT NULL,
+                    Id          TEXT NOT NULL,
+                    Descripcion TEXT,
+                    PRIMARY KEY (BloqueId, FincaId, Id)
+                );").Wait();
+
+                database.ExecuteAsync(@"CREATE TABLE IF NOT EXISTS LaboresActividad (
+                    BloqueId       TEXT NOT NULL,
+                    FincaId        TEXT NOT NULL,
+                    OrdenTrabajoId TEXT NOT NULL,
+                    Id             TEXT NOT NULL,
+                    Descripcion    TEXT,
+                    PRIMARY KEY (BloqueId, FincaId, OrdenTrabajoId, Id)
+                );").Wait();
+
+                database.ExecuteAsync(@"CREATE TABLE IF NOT EXISTS LaboresUnidad (
+                    Id          TEXT NOT NULL,
+                    Descripcion TEXT,
+                    PRIMARY KEY (Id)
+                );").Wait();
+
+                database.ExecuteAsync(@"CREATE TABLE IF NOT EXISTS LaboresRecurso (
+                    Id          TEXT NOT NULL,
+                    Descripcion TEXT,
+                    IdConcepto  INTEGER NOT NULL,
+                    UnidadId    TEXT NOT NULL,
+                    PRIMARY KEY (Id)
                 );").Wait();
 
                 // ── TicoFrut tables ──────────────────────────────────────────────
@@ -177,6 +233,107 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
                 throw;
             }
             
+        }
+
+        // ════════════════════════════════════════════════════════════════════════
+        // Catálogos de labores (Geotime: Ph_Labores*)
+        // ════════════════════════════════════════════════════════════════════════
+
+        public async Task<List<cPh_LaboresBloque>> GetLaboresBloquesAsync()
+        {
+            var locals = await database.Table<LaboresBloqueLocal>().ToListAsync();
+            return locals.Select(l => new cPh_LaboresBloque { Id = l.Id, Descripcion = l.Descripcion ?? "", Estado = true })
+                         .OrderBy(l => l.Id).ToList();
+        }
+
+        public async Task<List<cPh_LaboresFinca>> GetLaboresFincasAsync()
+        {
+            var locals = await database.Table<LaboresFincaLocal>().ToListAsync();
+            return locals.Select(l => new cPh_LaboresFinca { BloqueId = l.BloqueId, Id = l.Id, Descripcion = l.Descripcion ?? "", Estado = true })
+                         .OrderBy(l => l.BloqueId).ThenBy(l => l.Id).ToList();
+        }
+
+        public async Task<List<cPh_LaboresLote>> GetLaboresLotesAsync()
+        {
+            var locals = await database.Table<LaboresLoteLocal>().ToListAsync();
+            return locals.Select(l => new cPh_LaboresLote { BloqueId = l.BloqueId, FincaId = l.FincaId, Id = l.Id, Descripcion = l.Descripcion ?? "", Estado = true })
+                         .OrderBy(l => l.BloqueId).ThenBy(l => l.FincaId).ThenBy(l => l.Id).ToList();
+        }
+
+        public async Task<List<cPh_LaboresOrdenTrabajo>> GetLaboresOrdenesTrabajoAsync()
+        {
+            var locals = await database.Table<LaboresOrdenTrabajoLocal>().ToListAsync();
+            return locals.Select(l => new cPh_LaboresOrdenTrabajo { BloqueId = l.BloqueId, FincaId = l.FincaId, Id = l.Id, Descripcion = l.Descripcion ?? "", Estado = true })
+                         .OrderBy(l => l.BloqueId).ThenBy(l => l.FincaId).ThenBy(l => l.Id).ToList();
+        }
+
+        public async Task<List<cPh_LaboresActividad>> GetLaboresActividadesAsync()
+        {
+            var locals = await database.Table<LaboresActividadLocal>().ToListAsync();
+            return locals.Select(l => new cPh_LaboresActividad { BloqueId = l.BloqueId, FincaId = l.FincaId, OrdenTrabajoId = l.OrdenTrabajoId, Id = l.Id, Descripcion = l.Descripcion ?? "", Estado = true })
+                         .OrderBy(l => l.BloqueId).ThenBy(l => l.FincaId).ThenBy(l => l.OrdenTrabajoId).ThenBy(l => l.Id).ToList();
+        }
+
+        public async Task<List<cPh_LaboresUnidad>> GetLaboresUnidadesAsync()
+        {
+            var locals = await database.Table<LaboresUnidadLocal>().ToListAsync();
+            return locals.Select(l => new cPh_LaboresUnidad { Id = l.Id, Descripcion = l.Descripcion ?? "", Estado = true })
+                         .OrderBy(l => l.Id).ToList();
+        }
+
+        public async Task<List<cPh_LaboresRecurso>> GetLaboresRecursosAsync()
+        {
+            var locals = await database.Table<LaboresRecursoLocal>().ToListAsync();
+            return locals.Select(l => new cPh_LaboresRecurso { Id = l.Id, Descripcion = l.Descripcion ?? "", IdConcepto = l.IdConcepto, UnidadId = l.UnidadId, Estado = true })
+                         .OrderBy(l => l.Descripcion).ToList();
+        }
+
+        /// <summary>
+        /// Reemplaza los siete catálogos en una sola transacción: o quedan todos actualizados o ninguno.
+        /// Solo se guardan los registros con Estado = true.
+        /// </summary>
+        public async Task SaveLaboresCatalogosAsync(
+            IEnumerable<cPh_LaboresBloque> bloques,
+            IEnumerable<cPh_LaboresFinca> fincas,
+            IEnumerable<cPh_LaboresLote> lotes,
+            IEnumerable<cPh_LaboresOrdenTrabajo> ordenes,
+            IEnumerable<cPh_LaboresActividad> actividades,
+            IEnumerable<cPh_LaboresUnidad> unidades,
+            IEnumerable<cPh_LaboresRecurso> recursos)
+        {
+            var lBloques = bloques.Where(x => x.Estado)
+                .Select(x => new LaboresBloqueLocal { Id = x.Id, Descripcion = x.Descripcion }).ToList();
+            var lFincas = fincas.Where(x => x.Estado)
+                .Select(x => new LaboresFincaLocal { BloqueId = x.BloqueId, Id = x.Id, Descripcion = x.Descripcion }).ToList();
+            var lLotes = lotes.Where(x => x.Estado)
+                .Select(x => new LaboresLoteLocal { BloqueId = x.BloqueId, FincaId = x.FincaId, Id = x.Id, Descripcion = x.Descripcion }).ToList();
+            var lOrdenes = ordenes.Where(x => x.Estado)
+                .Select(x => new LaboresOrdenTrabajoLocal { BloqueId = x.BloqueId, FincaId = x.FincaId, Id = x.Id, Descripcion = x.Descripcion }).ToList();
+            var lActividades = actividades.Where(x => x.Estado)
+                .Select(x => new LaboresActividadLocal { BloqueId = x.BloqueId, FincaId = x.FincaId, OrdenTrabajoId = x.OrdenTrabajoId, Id = x.Id, Descripcion = x.Descripcion }).ToList();
+            var lUnidades = unidades.Where(x => x.Estado)
+                .Select(x => new LaboresUnidadLocal { Id = x.Id, Descripcion = x.Descripcion }).ToList();
+            var lRecursos = recursos.Where(x => x.Estado)
+                .Select(x => new LaboresRecursoLocal { Id = x.Id, Descripcion = x.Descripcion, IdConcepto = x.IdConcepto, UnidadId = x.UnidadId }).ToList();
+
+            await database.RunInTransactionAsync(db =>
+            {
+                db.DeleteAll<LaboresBloqueLocal>();
+                db.DeleteAll<LaboresFincaLocal>();
+                db.DeleteAll<LaboresLoteLocal>();
+                db.DeleteAll<LaboresOrdenTrabajoLocal>();
+                db.DeleteAll<LaboresActividadLocal>();
+                db.DeleteAll<LaboresUnidadLocal>();
+                db.DeleteAll<LaboresRecursoLocal>();
+
+                db.InsertAll(lBloques);
+                db.InsertAll(lFincas);
+                db.InsertAll(lLotes);
+                db.InsertAll(lOrdenes);
+                db.InsertAll(lActividades);
+                db.InsertAll(lUnidades);
+                db.InsertAll(lRecursos);
+            });
         }
 
         private cEmpleado MapEmpleadoLocalToEmpleado(cEmpleadoLocal l)
