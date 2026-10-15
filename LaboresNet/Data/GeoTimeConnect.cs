@@ -406,6 +406,64 @@ namespace PortalEmpleadoGeotime.Client.Data
 
             return await client.GetAsync(api);
         }
+
+        // ── Catálogos de labores (Ph_Labores*) ───────────────────────────────
+
+        /// <summary>
+        /// GetListaLabores: GET de un catálogo. Devuelve null si la respuesta no fue exitosa
+        /// o si hubo excepción, para que el llamador distinga "falló" de "vacío".
+        /// </summary>
+        private async Task<IEnumerable<T>?> GetListaLabores<T>(string method)
+        {
+            try
+            {
+                var result = await Get(method);
+                if (!result.IsSuccessStatusCode)
+                {
+                    _logger.LogWarning($"GetListaLabores({method}): {(int)result.StatusCode} {result.ReasonPhrase}");
+                    return null;
+                }
+
+                List<T>? lista = await result.Content.ReadFromJsonAsync<List<T>>();
+                return lista;
+            }
+            catch (Exception e)
+            {
+                _logger.LogError($"GetListaLabores({method}): {e.Message}");
+                return null;
+            }
+        }
+
+        /// <summary>Arma "/Ruta?clave=valor&amp;..." omitiendo los filtros nulos o vacíos.</summary>
+        private static string ConFiltros(string ruta, params (string clave, string? valor)[] filtros)
+        {
+            var partes = filtros
+                .Where(f => !string.IsNullOrEmpty(f.valor))
+                .Select(f => $"{f.clave}={Uri.EscapeDataString(f.valor!)}")
+                .ToList();
+            return partes.Count == 0 ? ruta : $"{ruta}?{string.Join("&", partes)}";
+        }
+
+        public Task<IEnumerable<cPh_LaboresBloque>?> GetLaboresBloques()
+            => GetListaLabores<cPh_LaboresBloque>("/PhLaboresBloque");
+
+        public Task<IEnumerable<cPh_LaboresFinca>?> GetLaboresFincas(string? bloqueId = null)
+            => GetListaLabores<cPh_LaboresFinca>(ConFiltros("/PhLaboresFinca", ("bloqueId", bloqueId)));
+
+        public Task<IEnumerable<cPh_LaboresLote>?> GetLaboresLotes(string? bloqueId = null, string? fincaId = null)
+            => GetListaLabores<cPh_LaboresLote>(ConFiltros("/PhLaboresLote", ("bloqueId", bloqueId), ("fincaId", fincaId)));
+
+        public Task<IEnumerable<cPh_LaboresOrdenTrabajo>?> GetLaboresOrdenesTrabajo(string? bloqueId = null, string? fincaId = null)
+            => GetListaLabores<cPh_LaboresOrdenTrabajo>(ConFiltros("/PhLaboresOrdenTrabajo", ("bloqueId", bloqueId), ("fincaId", fincaId)));
+
+        public Task<IEnumerable<cPh_LaboresActividad>?> GetLaboresActividades(string? bloqueId = null, string? fincaId = null, string? ordenTrabajoId = null)
+            => GetListaLabores<cPh_LaboresActividad>(ConFiltros("/PhLaboresActividad", ("bloqueId", bloqueId), ("fincaId", fincaId), ("ordenTrabajoId", ordenTrabajoId)));
+
+        public Task<IEnumerable<cPh_LaboresUnidad>?> GetLaboresUnidades()
+            => GetListaLabores<cPh_LaboresUnidad>("/PhLaboresUnidad");
+
+        public Task<IEnumerable<cPh_LaboresRecurso>?> GetLaboresRecursos(string? unidadId = null, int? idConcepto = null)
+            => GetListaLabores<cPh_LaboresRecurso>(ConFiltros("/PhLaboresRecurso", ("unidadId", unidadId), ("idConcepto", idConcepto?.ToString())));
         public async Task<IEnumerable<cEmpleado>> GetEmpleado()
         {
             IEnumerable<cEmpleado>? empleado = null;

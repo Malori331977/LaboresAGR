@@ -597,5 +597,29 @@ namespace PortalEmpleadoGeotime.Client.Data.Interfaces
         public Task<IEnumerable<cSolicitudAuxLabor>> GetSolicitudAuxLaborByResponsable(string compania, string idResponsable, string fechainicial, string fechafinal);
         public Task<cSolicitudAuxLabor> GetSolicitudAuxLabor(long id);
 
+        // ── Catálogos de labores (Ph_Labores*) ───────────────────────────────
+        // Devuelven null cuando la API no respondió con éxito (distinto de lista vacía).
+
+        /// <summary>GetLaboresBloques: lista los bloques de labores.</summary>
+        public Task<IEnumerable<cPh_LaboresBloque>?> GetLaboresBloques();
+
+        /// <summary>GetLaboresFincas: lista las fincas; opcionalmente de un bloque.</summary>
+        public Task<IEnumerable<cPh_LaboresFinca>?> GetLaboresFincas(string? bloqueId = null);
+
+        /// <summary>GetLaboresLotes: lista los lotes; opcionalmente por bloque y/o finca.</summary>
+        public Task<IEnumerable<cPh_LaboresLote>?> GetLaboresLotes(string? bloqueId = null, string? fincaId = null);
+
+        /// <summary>GetLaboresOrdenesTrabajo: lista las órdenes de trabajo; opcionalmente por bloque y/o finca.</summary>
+        public Task<IEnumerable<cPh_LaboresOrdenTrabajo>?> GetLaboresOrdenesTrabajo(string? bloqueId = null, string? fincaId = null);
+
+        /// <summary>GetLaboresActividades: lista las actividades; opcionalmente por bloque, finca y/u orden de trabajo.</summary>
+        public Task<IEnumerable<cPh_LaboresActividad>?> GetLaboresActividades(string? bloqueId = null, string? fincaId = null, string? ordenTrabajoId = null);
+
+        /// <summary>GetLaboresUnidades: lista las unidades de medida.</summary>
+        public Task<IEnumerable<cPh_LaboresUnidad>?> GetLaboresUnidades();
+
+        /// <summary>GetLaboresRecursos: lista los recursos; opcionalmente por unidad y/o concepto.</summary>
+        public Task<IEnumerable<cPh_LaboresRecurso>?> GetLaboresRecursos(string? unidadId = null, int? idConcepto = null);
+
     }
 }
