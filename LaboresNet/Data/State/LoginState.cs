@@ -17,8 +17,11 @@ namespace PortalEmpleadoGeotime.Client.Data.State
         public bool InMarcador { get; set; } = false;
         public int TimeZone { get; set; } = 1;
 
-        public string CompaniaSeleccionada { get; set; } = "";
-        public string PaisSeleccionado { get; set; } = "";
+        /// <summary>
+        /// IDCOMP de la compaÃ±Ã­a con que se iniciÃ³ sesiÃ³n. Solo identifica el tenant de la API
+        /// de Geotime; no es un dato de negocio ni filtra catÃ¡logos.
+        /// </summary>
+        public string CompaniaTenant { get; set; } = "";
 
         public LoginState()
         {
@@ -39,15 +42,9 @@ namespace PortalEmpleadoGeotime.Client.Data.State
             NotifyStateChanged();
         }
 
-        public void SetCompania(string compania)
+        public void SetCompaniaTenant(string idcomp)
         {
-            CompaniaSeleccionada = compania;
-            NotifyStateChanged();
-        }
-
-        public void SetPais(string pais)
-        {
-            PaisSeleccionado = pais;
+            CompaniaTenant = idcomp ?? "";
             NotifyStateChanged();
         }
 

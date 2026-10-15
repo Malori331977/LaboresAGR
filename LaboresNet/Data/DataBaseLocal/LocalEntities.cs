@@ -399,7 +399,6 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
     {
         /// <summary>Identificador único de registro (parte de la PK compuesta).</summary>
         public long      IdRegistro  { get; set; }
-        public string?   Compania    { get; set; }
         public string?   IdEmpleado  { get; set; }
         public DateTime  Fecha       { get; set; }
         public string?   Comentarios { get; set; }
@@ -411,7 +410,6 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
     {
         /// <summary>FK → GeoAgrLaborAuxiliar.IdRegistro; parte de la PK compuesta.</summary>
         public long      IdRegistro           { get; set; }
-        public string?   Compania             { get; set; }
         public string?   IdEmpleado           { get; set; }
         public DateTime  Fecha                { get; set; }
         public int       Item                 { get; set; }

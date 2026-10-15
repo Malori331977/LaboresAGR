@@ -143,17 +143,15 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
 
                 database.ExecuteAsync(@"CREATE TABLE IF NOT EXISTS GeoAgrLaborAuxiliar (
                     IdRegistro  INTEGER NOT NULL,
-                    Compania    TEXT    NOT NULL,
                     IdEmpleado  TEXT    NOT NULL,
                     Fecha       TEXT    NOT NULL,
                     Comentarios TEXT,
                     EstadoId    INTEGER NOT NULL,
-                    PRIMARY KEY (IdRegistro, Compania, IdEmpleado, Fecha)
+                    PRIMARY KEY (IdRegistro, IdEmpleado, Fecha)
                 );").Wait();
 
                 database.ExecuteAsync(@"CREATE TABLE IF NOT EXISTS GeoAgrLaborAuxiliarDet (
                     IdRegistro          INTEGER NOT NULL,
-                    Compania            TEXT    NOT NULL,
                     IdEmpleado          TEXT    NOT NULL,
                     Fecha               TEXT    NOT NULL,
                     Item                INTEGER NOT NULL,
@@ -168,9 +166,9 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
                     HorasAprobadas      REAL,
                     EstadoId            INTEGER NOT NULL,
                     IdEmpleadoAsignado  TEXT    NOT NULL,
-                    PRIMARY KEY (IdRegistro, Compania, IdEmpleado, Fecha, Item, IdEmpleadoAsignado),
-                    FOREIGN KEY (IdRegistro, Compania, IdEmpleado, Fecha)
-                        REFERENCES GeoAgrLaborAuxiliar (IdRegistro, Compania, IdEmpleado, Fecha)
+                    PRIMARY KEY (IdRegistro, IdEmpleado, Fecha, Item, IdEmpleadoAsignado),
+                    FOREIGN KEY (IdRegistro, IdEmpleado, Fecha)
+                        REFERENCES GeoAgrLaborAuxiliar (IdRegistro, IdEmpleado, Fecha)
                         ON DELETE CASCADE
                 );").Wait();
 
@@ -2709,7 +2707,6 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
             new GeoAgrLaborAuxiliar
             {
                 IdRegistro  = l.IdRegistro,
-                Compania    = l.Compania!,
                 IdEmpleado  = l.IdEmpleado!,
                 Fecha       = l.Fecha,
                 Comentarios = l.Comentarios,
@@ -2722,30 +2719,28 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
             return locals.Select(MapLocalToAuxiliar).ToList();
         }
 
-        public async Task<List<GeoAgrLaborAuxiliar>> GetGeoAgrLaborAuxiliarAsync(string compania, string idEmpleado)
+        public async Task<List<GeoAgrLaborAuxiliar>> GetGeoAgrLaborAuxiliarAsync(string idEmpleado)
         {
             var locals = await database.Table<GeoAgrLaborAuxiliarLocal>()
-                .Where(l => l.Compania == compania && l.IdEmpleado == idEmpleado)
+                .Where(l => l.IdEmpleado == idEmpleado)
                 .ToListAsync();
             return locals.Select(MapLocalToAuxiliar).ToList();
         }
 
-        public async Task<GeoAgrLaborAuxiliar?> GetGeoAgrLaborAuxiliarAsync(string compania, string idEmpleado, DateTime fecha, long idRegistro)
+        public async Task<GeoAgrLaborAuxiliar?> GetGeoAgrLaborAuxiliarAsync(string idEmpleado, DateTime fecha, long idRegistro)
         {
             var l = await database.Table<GeoAgrLaborAuxiliarLocal>()
-                .FirstOrDefaultAsync(i => i.Compania == compania
-                                       && i.IdEmpleado == idEmpleado
+                .FirstOrDefaultAsync(i => i.IdEmpleado == idEmpleado
                                        && i.Fecha == fecha
                                        && i.IdRegistro == idRegistro);
             return l is null ? null : MapLocalToAuxiliar(l);
         }
 
-        public async Task<List<GeoAgrLaborAuxiliar>> GetGeoAgrLaborAuxiliarAsync(string compania, string idEmpleado, DateTime fechaInicio, DateTime fechaFinal)
+        public async Task<List<GeoAgrLaborAuxiliar>> GetGeoAgrLaborAuxiliarAsync(string idEmpleado, DateTime fechaInicio, DateTime fechaFinal)
         {
             var locals = await database.Table<GeoAgrLaborAuxiliarLocal>()
-                .Where(i => i.Compania == compania
-                            && i.IdEmpleado == idEmpleado
-                            && i.Fecha >= fechaInicio 
+                .Where(i => i.IdEmpleado == idEmpleado
+                            && i.Fecha >= fechaInicio
                             && i.Fecha <= fechaFinal
                             && (i.EstadoId != 99 && i.EstadoId != 100))
                 .ToListAsync();
@@ -2758,19 +2753,19 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
             if (list.Count == 0) return 0;
 
             var existingLocals = await database.Table<GeoAgrLaborAuxiliarLocal>().ToListAsync();
-            var existingDict   = existingLocals.ToDictionary(l => (l.Compania!, l.IdEmpleado!, l.Fecha));
+            var existingDict   = existingLocals.ToDictionary(l => (l.IdEmpleado!, l.Fecha));
 
             var toInsert = new List<GeoAgrLaborAuxiliarLocal>();
             var toUpdate = new List<GeoAgrLaborAuxiliarLocal>();
 
-            // Próximo IdRegistro disponible (MAX+1 o 1 si la tabla está vacía)
+            // PrÃ³ximo IdRegistro disponible (MAX+1 o 1 si la tabla estÃ¡ vacÃ­a)
             long nextId = existingLocals.Count > 0
                 ? existingLocals.Max(l => l.IdRegistro) + 1
                 : 1;
 
             foreach (var item in list)
             {
-                if (existingDict.TryGetValue((item.Compania, item.IdEmpleado, item.Fecha), out var local))
+                if (existingDict.TryGetValue((item.IdEmpleado, item.Fecha), out var local))
                 {
                     local.Comentarios = item.Comentarios;
                     toUpdate.Add(local);
@@ -2780,7 +2775,6 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
                     toInsert.Add(new GeoAgrLaborAuxiliarLocal
                     {
                         IdRegistro  = nextId++,
-                        Compania    = item.Compania,
                         IdEmpleado  = item.IdEmpleado,
                         Fecha       = item.Fecha,
                         Comentarios = item.Comentarios,
@@ -2795,20 +2789,20 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
                     db.Execute(
                         @"UPDATE GeoAgrLaborAuxiliar
                           SET Comentarios=?
-                          WHERE IdRegistro=? AND Compania=? AND IdEmpleado=? AND Fecha=?",
-                        u.Comentarios, u.IdRegistro, u.Compania, u.IdEmpleado, u.Fecha);
+                          WHERE IdRegistro=? AND IdEmpleado=? AND Fecha=?",
+                        u.Comentarios, u.IdRegistro, u.IdEmpleado, u.Fecha);
                 if (toInsert.Count > 0)
                     totalAffected += db.InsertAll(toInsert);
             });
             return totalAffected;
         }
 
-        public async Task<int> SaveGeoAgrLaborAuxiliarEstadoAsync(long idRegistro, string compania)
+        public async Task<int> SaveGeoAgrLaborAuxiliarEstadoAsync(long idRegistro)
         {
-            // Marca el registro como "En Proceso de Autorización" (1), excepto los detalles ya
-            // finalizados —2 (Aprobado) y 99 (Aplicado)—, que conservan su estado y no se reenvían.
-            await database.ExecuteAsync(@"UPDATE GeoAgrLaborAuxiliar SET EstadoId=? WHERE IdRegistro=? AND Compania=? AND EstadoId NOT IN (2, 99)", 1, idRegistro, compania);
-            await database.ExecuteAsync(@"UPDATE GeoAgrLaborAuxiliarDet SET EstadoId=? WHERE IdRegistro=? AND Compania=? AND EstadoId NOT IN (2, 99)", 1, idRegistro, compania);
+            // Marca el registro como "En Proceso de AutorizaciÃ³n" (1), excepto los detalles ya
+            // finalizados â€”2 (Aprobado) y 99 (Aplicado)â€”, que conservan su estado y no se reenvÃ­an.
+            await database.ExecuteAsync(@"UPDATE GeoAgrLaborAuxiliar SET EstadoId=? WHERE IdRegistro=? AND EstadoId NOT IN (2, 99)", 1, idRegistro);
+            await database.ExecuteAsync(@"UPDATE GeoAgrLaborAuxiliarDet SET EstadoId=? WHERE IdRegistro=? AND EstadoId NOT IN (2, 99)", 1, idRegistro);
             return 1;
         }
 
@@ -2818,17 +2812,17 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
             return true;
         }
 
-        public async Task<bool> DeleteGeoAgrLaborAuxiliarAsync(string compania, string idEmpleado, DateTime fecha)
+        public async Task<bool> DeleteGeoAgrLaborAuxiliarAsync(string idEmpleado, DateTime fecha)
         {
             await database.ExecuteAsync(
-                "DELETE FROM GeoAgrLaborAuxiliar WHERE Compania=? AND IdEmpleado=? AND Fecha=?",
-                compania, idEmpleado, fecha);
+                "DELETE FROM GeoAgrLaborAuxiliar WHERE IdEmpleado=? AND Fecha=?",
+                idEmpleado, fecha);
             return true;
         }
 
-        // ════════════════════════════════════════════════════════════════════════
-        // TicoFrut — GeoAgrLaborAuxiliarDet
-        // ════════════════════════════════════════════════════════════════════════
+        // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+        // GeoAgrLaborAuxiliarDet
+        // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
         public async Task<List<GeoAgrLaborAuxiliarDet>> GetGeoAgrLaborAuxiliarDetAsync()
         {
@@ -2836,19 +2830,18 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
             return locals.Select(MapDetLocalToDet).ToList();
         }
 
-        public async Task<List<GeoAgrLaborAuxiliarDet>> GetGeoAgrLaborAuxiliarDetAsync(string compania, string idEmpleado)
+        public async Task<List<GeoAgrLaborAuxiliarDet>> GetGeoAgrLaborAuxiliarDetAsync(string idEmpleado)
         {
             var locals = await database.Table<GeoAgrLaborAuxiliarDetLocal>()
-                .Where(l => l.Compania == compania && l.IdEmpleado == idEmpleado)
+                .Where(l => l.IdEmpleado == idEmpleado)
                 .ToListAsync();
             return locals.Select(MapDetLocalToDet).ToList();
         }
 
-        public async Task<List<GeoAgrLaborAuxiliarDet>> GetGeoAgrLaborAuxiliarDetAsync(string compania, string idEmpleado, DateTime fechaInicio, DateTime fechaFinal)
+        public async Task<List<GeoAgrLaborAuxiliarDet>> GetGeoAgrLaborAuxiliarDetAsync(string idEmpleado, DateTime fechaInicio, DateTime fechaFinal)
         {
             var locals = await database.Table<GeoAgrLaborAuxiliarDetLocal>()
-                .Where(l => l.Compania == compania 
-                        && l.IdEmpleado == idEmpleado 
+                .Where(l => l.IdEmpleado == idEmpleado
                         && l.Fecha >= fechaInicio
                         && l.Fecha <= fechaFinal
                         && (l.EstadoId != 99 && l.EstadoId != 100))
@@ -2856,19 +2849,18 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
             return locals.Select(MapDetLocalToDet).ToList();
         }
 
-        public async Task<List<GeoAgrLaborAuxiliarDet>> GetGeoAgrLaborAuxiliarDetAsync(string compania, string idEmpleado, DateTime fecha, long IdRegistro)
+        public async Task<List<GeoAgrLaborAuxiliarDet>> GetGeoAgrLaborAuxiliarDetAsync(string idEmpleado, DateTime fecha, long idRegistro)
         {
             var locals = await database.Table<GeoAgrLaborAuxiliarDetLocal>()
-                .Where(l => l.Compania == compania && l.IdEmpleado == idEmpleado && l.Fecha == fecha && l.IdRegistro == IdRegistro)
+                .Where(l => l.IdEmpleado == idEmpleado && l.Fecha == fecha && l.IdRegistro == idRegistro)
                 .ToListAsync();
             return locals.Select(MapDetLocalToDet).ToList();
         }
 
-        public async Task<GeoAgrLaborAuxiliarDet?> GetGeoAgrLaborAuxiliarDetAsync(string compania, string idEmpleado, DateTime fecha, int item)
+        public async Task<GeoAgrLaborAuxiliarDet?> GetGeoAgrLaborAuxiliarDetPorItemAsync(string idEmpleado, DateTime fecha, int item)
         {
             var l = await database.Table<GeoAgrLaborAuxiliarDetLocal>()
-                .FirstOrDefaultAsync(i => i.Compania == compania && i.IdEmpleado == idEmpleado
-                                       && i.Fecha == fecha && i.Item == item);
+                .FirstOrDefaultAsync(i => i.IdEmpleado == idEmpleado && i.Fecha == fecha && i.Item == item);
             if (l is null) return null;
             return MapDetLocalToDet(l);
         }
@@ -2879,31 +2871,30 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
             if (list.Count == 0) return 0;
 
             var existingLocals = await database.Table<GeoAgrLaborAuxiliarDetLocal>().ToListAsync();
-            var existingDict   = existingLocals.ToDictionary(l => (l.Compania!, l.IdEmpleado!, l.Fecha, l.Item, l.IdEmpleadoAsignado!));
+            var existingDict   = existingLocals.ToDictionary(l => (l.IdEmpleado!, l.Fecha, l.Item, l.IdEmpleadoAsignado!));
 
             var toInsert = new List<GeoAgrLaborAuxiliarDetLocal>();
             var toUpdate = new List<GeoAgrLaborAuxiliarDetLocal>();
 
-            // Cache de IdRegistro del encabezado padre para evitar múltiples consultas
-            var idRegistroCache = new Dictionary<(string, string, DateTime), long>();
+            // Cache de IdRegistro del encabezado padre para evitar mÃºltiples consultas
+            var idRegistroCache = new Dictionary<(string, DateTime), long>();
 
             foreach (var item in list)
             {
                 var idEmpAsig = item.IdEmpleadoAsignado ?? item.IdEmpleado;
 
                 // Resolver IdRegistro del encabezado padre
-                var cacheKey = (item.Compania, item.IdEmpleado, item.Fecha);
+                var cacheKey = (item.IdEmpleado, item.Fecha);
                 if (!idRegistroCache.TryGetValue(cacheKey, out long idRegistro))
                 {
                     var padre = await database.Table<GeoAgrLaborAuxiliarLocal>()
-                        .FirstOrDefaultAsync(l => l.Compania   == item.Compania
-                                               && l.IdEmpleado == item.IdEmpleado
+                        .FirstOrDefaultAsync(l => l.IdEmpleado == item.IdEmpleado
                                                && l.Fecha      == item.Fecha);
                     idRegistro = padre?.IdRegistro ?? 0;
                     idRegistroCache[cacheKey] = idRegistro;
                 }
 
-                if (existingDict.TryGetValue((item.Compania, item.IdEmpleado, item.Fecha, item.Item, idEmpAsig), out var local))
+                if (existingDict.TryGetValue((item.IdEmpleado, item.Fecha, item.Item, idEmpAsig), out var local))
                 {
                     local.IdRegistro          = idRegistro;
                     local.Bloque              = item.Bloque;
@@ -2911,6 +2902,7 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
                     local.Lote                = item.Lote;
                     local.Ot                  = item.Ot;
                     local.Labor               = item.Labor;
+                    local.Recurso             = item.Recurso;
                     local.CantidadRendimiento = item.CantidadRendimiento;
                     local.Unidad              = item.Unidad;
                     local.HorasAprobadas      = item.HorasAprobadas;
@@ -2922,7 +2914,6 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
                     toInsert.Add(new GeoAgrLaborAuxiliarDetLocal
                     {
                         IdRegistro           = idRegistro,
-                        Compania             = item.Compania,
                         IdEmpleado           = item.IdEmpleado,
                         Fecha                = item.Fecha,
                         Item                 = item.Item,
@@ -2931,6 +2922,7 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
                         Lote                 = item.Lote,
                         Ot                   = item.Ot,
                         Labor                = item.Labor,
+                        Recurso              = item.Recurso,
                         CantidadRendimiento  = item.CantidadRendimiento,
                         Unidad               = item.Unidad,
                         HorasAprobadas       = item.HorasAprobadas,
@@ -2946,12 +2938,12 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
                 foreach (var u in toUpdate)
                     db.Execute(
                         @"UPDATE GeoAgrLaborAuxiliarDet
-                          SET IdRegistro=?, Bloque=?, Finca=?, Lote=?, Ot=?, Labor=?,
+                          SET IdRegistro=?, Bloque=?, Finca=?, Lote=?, Ot=?, Labor=?, Recurso=?,
                               CantidadRendimiento=?, Unidad=?, HorasAprobadas=?, EstadoId=?
-                          WHERE Compania=? AND IdEmpleado=? AND Fecha=? AND Item=? AND IdEmpleadoAsignado=?",
-                        u.IdRegistro, u.Bloque, u.Finca, u.Lote, u.Ot, u.Labor,
+                          WHERE IdEmpleado=? AND Fecha=? AND Item=? AND IdEmpleadoAsignado=?",
+                        u.IdRegistro, u.Bloque, u.Finca, u.Lote, u.Ot, u.Labor, u.Recurso,
                         u.CantidadRendimiento, u.Unidad, u.HorasAprobadas, u.EstadoId,
-                        u.Compania, u.IdEmpleado, u.Fecha, u.Item, u.IdEmpleadoAsignado);
+                        u.IdEmpleado, u.Fecha, u.Item, u.IdEmpleadoAsignado);
                 if (toInsert.Count > 0)
                     totalAffected += db.InsertAll(toInsert);
             });
@@ -2964,18 +2956,17 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
             return true;
         }
 
-        public async Task<bool> DeleteGeoAgrLaborAuxiliarDetAsync(string compania, string idEmpleado, DateTime fecha)
+        public async Task<bool> DeleteGeoAgrLaborAuxiliarDetAsync(string idEmpleado, DateTime fecha)
         {
             await database.ExecuteAsync(
-                "DELETE FROM GeoAgrLaborAuxiliarDet WHERE Compania=? AND IdEmpleado=? AND Fecha=?",
-                compania, idEmpleado, fecha);
+                "DELETE FROM GeoAgrLaborAuxiliarDet WHERE IdEmpleado=? AND Fecha=?",
+                idEmpleado, fecha);
             return true;
         }
 
         private static GeoAgrLaborAuxiliarDet MapDetLocalToDet(GeoAgrLaborAuxiliarDetLocal l) =>
             new GeoAgrLaborAuxiliarDet
             {
-                Compania            = l.Compania!,
                 IdEmpleado          = l.IdEmpleado!,
                 Fecha               = l.Fecha,
                 Item                = l.Item,
@@ -3052,7 +3043,6 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
             var local = new GeoAgrLaborAuxiliarLocal
             {
                 IdRegistro  = nextId,
-                Compania    = labor.Compania,
                 IdEmpleado  = labor.IdEmpleado,
                 Fecha       = labor.Fecha,
                 Comentarios = labor.Comentarios,
@@ -3102,7 +3092,6 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
             var toInsert = list.Select(item => new GeoAgrLaborAuxiliarDetLocal
             {
                 IdRegistro          = idRegistro,
-                Compania            = item.Compania,
                 IdEmpleado          = item.IdEmpleado,
                 Fecha               = item.Fecha,
                 Item                = item.Item,

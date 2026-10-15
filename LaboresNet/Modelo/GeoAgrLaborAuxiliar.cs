@@ -10,9 +10,6 @@ namespace PortalEmpleadoGeotime.Client.Modelo
     public class GeoAgrLaborAuxiliar
     {
 
-        [Column("COMPANIA")]
-        public string Compania { get; set; }
-
         [Column("ID_EMPLEADO")]
         public string IdEmpleado { get; set; }
 

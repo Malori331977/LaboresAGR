@@ -319,6 +319,7 @@ geoTimeOk = await geoConnect.ApiDisponible();
             }
 
             geoConnect.setSchema(companiaSeleccionada);
+            loginState.SetCompaniaTenant(companiaSeleccionada.IDCOMP);
             Thread.Sleep(1000);
 
             string endpointLogin = "LoginAdm";
@@ -393,6 +394,7 @@ geoTimeOk = await geoConnect.ApiDisponible();
                 var companiaSeleccionada = companiasUsuario.FirstOrDefault(e => e.IDCOMP == login.Compania);
 
                 geoConnect.setSchema(companiaSeleccionada!);
+                loginState.SetCompaniaTenant(companiaSeleccionada!.IDCOMP);
                 Thread.Sleep(1000);
 
                 loginState.SetTimeZone(companiaSeleccionada!.ZONAHORARIA);

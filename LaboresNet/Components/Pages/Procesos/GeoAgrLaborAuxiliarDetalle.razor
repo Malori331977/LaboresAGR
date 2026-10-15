@@ -313,7 +313,6 @@
 
     public class EncabezadoForm
     {
-        public string?  Compania    { get; set; }
         public string?  IdEmpleado  { get; set; }
         public DateOnly FechaDO     { get; set; } = DateOnly.FromDateTime(DateTime.Now);
         public string?  Comentarios { get; set; }
@@ -403,7 +402,6 @@
             listaRecursoConcepto = tRecursoConcepto.Result;
             listaOts       = tOts.Result;
 
-            encabezado.Compania   = loginState.Empleado.IdCCosto;
             encabezado.IdEmpleado = loginState.Empleado.IdNumero;
         }
         catch (Exception ex)
@@ -421,7 +419,6 @@
         int nextItem = detalles.Count > 0 ? detalles.Max(d => d.Item) + 1 : 1;
         detalles.Add(new GeoAgrLaborAuxiliarDetExt
         {
-            Compania   = loginState.CompaniaSeleccionada,
             IdEmpleado = encabezado.IdEmpleado,
             Item       = nextItem,
             EstadoId   = 0,
@@ -445,12 +442,10 @@
         {
             if (!await Validar()) return;
 
-            var comp    = loginState.CompaniaSeleccionada;
             var fechaDT = encabezado.FechaDO.ToDateTime(TimeOnly.MinValue);
 
             var header = new GeoAgrLaborAuxiliar
             {
-                Compania    = comp,
                 IdEmpleado  = encabezado.IdEmpleado!,
                 Fecha       = fechaDT,
                 Comentarios = encabezado.Comentarios,
@@ -463,7 +458,6 @@
             // ── 2. Expansión cartesiana: un GeoAgrLaborAuxiliarDet por (Item × Empleado asignado) ──
             var listaDets = detalles.SelectMany(d => empleadosSeleccionados.Select(e => new GeoAgrLaborAuxiliarDet
             {
-                Compania            = comp,
                 IdEmpleado          = encabezado.IdEmpleado,
                 Fecha               = fechaDT,
                 Item                = d.Item,
@@ -505,6 +499,12 @@
             if (!sincronizar)
                 return; // Si no se puede sincronizar, salir sin hacer nada
 
+            if (string.IsNullOrEmpty(loginState.CompaniaTenant))
+            {
+                await swal.FireAsync("AtenciÃ³n", "No se pudo determinar la compaÃ±Ã­a de la sesiÃ³n; la labor quedÃ³ solo en el dispositivo.", SweetAlertIcon.Warning);
+                return;
+            }
+
             var listaDetalle = listaDets.Select(d => new cSolicitudAuxLaborDet
             {
                 SOLICITUDID = 0, // Se asignará en Geotime
@@ -518,7 +518,7 @@
                 RECURSO = d.Recurso!,
                 CANTIDAD_RENDIMIENTO = (decimal)d.CantidadRendimiento!,
                 UNIDAD = d.Unidad!,
-                COMPANIA = header.Compania!,
+                COMPANIA = loginState.CompaniaTenant,
                 FECHA = header.Fecha,
                 HORAS_APROBADAS = 0M,
                 ESTADOID = 1,
@@ -527,7 +527,7 @@
             var laborGT = new cSolicitudAuxLabor
             {
                 ID = 0, // Se asignará en Geotime
-                COMPANIA    = header.Compania!,
+                COMPANIA    = loginState.CompaniaTenant,
                 IDRESPONSABLE  = header.IdEmpleado!,
                 FECHA       = header.Fecha,
                 COMENTARIOS = header.Comentarios,
@@ -544,7 +544,7 @@
             if (response.Id=="0")
             {
                 // Actualizar nuestro registro local con el ID asignado por Geotime
-                await marcaDBLocal.SaveGeoAgrLaborAuxiliarEstadoAsync(idRegistroActual, header.Compania!);
+                await marcaDBLocal.SaveGeoAgrLaborAuxiliarEstadoAsync(idRegistroActual);
 
             }
 

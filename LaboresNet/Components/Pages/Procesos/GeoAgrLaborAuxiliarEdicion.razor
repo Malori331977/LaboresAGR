@@ -158,7 +158,6 @@
 
 @code {
 
-    [SupplyParameterFromQuery] public string? compania    { get; set; }
     [SupplyParameterFromQuery] public string? idEmpleado  { get; set; }
     [SupplyParameterFromQuery] public string? fecha       { get; set; }
     [SupplyParameterFromQuery] public long?   idregistro  { get; set; }
@@ -243,8 +242,8 @@
             idRegistroActual = idregistro ?? 0;
             var fechaDT = DateTime.ParseExact(fecha!, "yyyyMMdd", null);
 
-            var tHeader    = marcaDBLocal.GetGeoAgrLaborAuxiliarAsync(compania!, idEmpleado!, fechaDT, idRegistroActual);
-            var tDets      = marcaDBLocal.GetGeoAgrLaborAuxiliarDetAsync(compania!, idEmpleado!, fechaDT, idRegistroActual);
+            var tHeader    = marcaDBLocal.GetGeoAgrLaborAuxiliarAsync(idEmpleado!, fechaDT, idRegistroActual);
+            var tDets      = marcaDBLocal.GetGeoAgrLaborAuxiliarDetAsync(idEmpleado!, fechaDT, idRegistroActual);
             var tEmpleados = marcaDBLocal.GetEmpleadoAsync();
             var tEstados   = marcaDBLocal.GetEstadoAsync();
             var tOts       = marcaDBLocal.GetLaboresOrdenesTrabajoAsync();
@@ -347,11 +346,17 @@
         {
             var fechaDT = DateTime.ParseExact(fecha!, "yyyyMMdd", null);
 
+            if (string.IsNullOrEmpty(loginState.CompaniaTenant))
+            {
+                await swal.FireAsync("AtenciÃ³n", "No se pudo determinar la compaÃ±Ã­a de la sesiÃ³n; el cambio quedÃ³ solo en el dispositivo.", SweetAlertIcon.Warning);
+                return;
+            }
+
             // Encabezado + todos los detalles actuales (incluye los cambios recién guardados)
-            var header = await marcaDBLocal.GetGeoAgrLaborAuxiliarAsync(compania!, idEmpleado!, fechaDT, idRegistroActual);
+            var header = await marcaDBLocal.GetGeoAgrLaborAuxiliarAsync(idEmpleado!, fechaDT, idRegistroActual);
             if (header is null) return;
 
-            var listaDets = await marcaDBLocal.GetGeoAgrLaborAuxiliarDetAsync(compania!, idEmpleado!, fechaDT, idRegistroActual);
+            var listaDets = await marcaDBLocal.GetGeoAgrLaborAuxiliarDetAsync(idEmpleado!, fechaDT, idRegistroActual);
             if (listaDets is null || listaDets.Count == 0) return;
 
 
@@ -368,7 +373,7 @@
                 RECURSO              = d.Recurso!,
                 CANTIDAD_RENDIMIENTO = (decimal)d.CantidadRendimiento!,
                 UNIDAD               = d.Unidad!,
-                COMPANIA             = header.Compania!,
+                COMPANIA             = loginState.CompaniaTenant,
                 FECHA                = header.Fecha,
                 HORAS_APROBADAS      = d.HorasAprobadas ?? 0M,
                 ESTADOID             = d.EstadoId == 2 || d.EstadoId == 99 ? d.EstadoId : 1,
@@ -377,7 +382,7 @@
             var laborGT = new cSolicitudAuxLabor
             {
                 ID                = 0, // Se asignará en Geotime
-                COMPANIA          = header.Compania!,
+                COMPANIA          = loginState.CompaniaTenant,
                 IDRESPONSABLE     = header.IdEmpleado!,
                 FECHA             = header.Fecha,
                 COMENTARIOS       = header.Comentarios,
@@ -395,7 +400,7 @@
             if (response.Id == "0")
             {
                 // Marcar el registro local como sincronizado
-                await marcaDBLocal.SaveGeoAgrLaborAuxiliarEstadoAsync(idRegistroActual, header.Compania!);
+                await marcaDBLocal.SaveGeoAgrLaborAuxiliarEstadoAsync(idRegistroActual);
             }
         }
         catch (Exception ex)
