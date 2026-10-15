@@ -28,26 +28,7 @@
 
     <RadzenFooter>
         <div class="footer-content">
-            
-            <div class="footer-field">
-                <RadzenLabel Text="País:" Style="color: white; font-size: 0.8rem; margin-right: 4px;" />
-                <RadzenDropDown @bind-Value="@loginState.PaisSeleccionado"
-                                Data="@listaPaises"
-                                Change="@OnPaisChange"
-                                Placeholder="Seleccione..."
-                                Style="width: 100%; min-width: 0; font-size: 0.8rem;"
-                                AllowClear="false" />
-            </div>
-            <div class="footer-field">
-                <RadzenLabel Text="Compañía:" Style="color: white; font-size: 0.8rem; margin-right: 4px;" />
-                <RadzenDropDown @bind-Value="@loginState.CompaniaSeleccionada"
-                                Data="@listaCompanias"
-                                Change="@OnCompaniaChange"
-                                Placeholder="Seleccione..."
-                                Style="width: 100%; min-width: 0; font-size: 0.8rem;"
-                                AllowClear="false" />
-            </div>
-            <ApiSemaforo TicoFrutOk="@ticoFrutOk" GeoTimeOk="@geoTimeOk" />
+            <ApiSemaforo GeoTimeOk="@geoTimeOk" />
         </div>
     </RadzenFooter>
 
@@ -60,15 +41,9 @@
     private bool Desconectado = false;
 
     // Estado de las APIs para el semáforo del footer (se consulta una sola vez al cargar)
-    private bool? ticoFrutOk;
     private bool? geoTimeOk;
     MarcasDBLocal marcasDBLocal = new();
 
-    List<string> listaPaises    = new();
-    List<string> listaCompanias = new();
-
-    // Cache completo; se filtra al cambiar país
-    List<GeoAgrFinca> todasLasFincas = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -85,81 +60,6 @@
             NavigationManager.NavigateTo("./");
             return;
         }
-
-        await CargarFiltrosFooter();
-    }
-
-    private async Task CargarFiltrosFooter()
-    {
-        todasLasFincas = await marcasDBLocal.GetGeoAgrFincaAsync();
-
-        listaPaises = todasLasFincas
-            .Where(f => !string.IsNullOrEmpty(f.Pais))
-            .Select(f => f.Pais!)
-            .Distinct()
-            .OrderBy(p => p)
-            .ToList();
-
-        // Restaurar última selección guardada del usuario
-        var filtroGuardado = await marcasDBLocal.GetFiltroUsuarioAsync(loginState.Empleado.IdNumero);
-        if (filtroGuardado is not null
-            && !string.IsNullOrEmpty(filtroGuardado.Pais)
-            && listaPaises.Contains(filtroGuardado.Pais))
-        {
-            loginState.SetPais(filtroGuardado.Pais);
-            FiltrarCompaniasPorPais(filtroGuardado.Pais);
-
-            if (!string.IsNullOrEmpty(filtroGuardado.Compania)
-                && listaCompanias.Contains(filtroGuardado.Compania))
-            {
-                loginState.SetCompania(filtroGuardado.Compania);
-            }
-        }
-        else
-        {
-            // Primera vez: lista de compañías vacía hasta que el usuario elija un país
-            listaCompanias = new();
-        }
-    }
-
-    private void FiltrarCompaniasPorPais(string pais)
-    {
-        listaCompanias = todasLasFincas
-            .Where(f => f.Pais == pais && !string.IsNullOrEmpty(f.Compania))
-            .Select(f => f.Compania!)
-            .Distinct()
-            .OrderBy(c => c)
-            .ToList();
-    }
-
-    private async Task OnPaisChange(object value)
-    {
-        var pais = value?.ToString() ?? "";
-        loginState.SetPais(pais);
-
-        // Resetear compañía y recargar lista filtrada
-        loginState.SetCompania("");
-        FiltrarCompaniasPorPais(pais);
-
-        await GuardarFiltro();
-    }
-
-    private async Task OnCompaniaChange(object value)
-    {
-        loginState.SetCompania(value?.ToString() ?? "");
-        await GuardarFiltro();
-    }
-
-    private async Task GuardarFiltro()
-    {
-        if (loginState.Empleado is not null
-            && !string.IsNullOrEmpty(loginState.Empleado.IdNumero))
-        {
-            await marcasDBLocal.SaveFiltroUsuarioAsync(
-                loginState.Empleado.IdNumero,
-                loginState.PaisSeleccionado,
-                loginState.CompaniaSeleccionada);
-        }
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -168,19 +68,10 @@
         {
             try
             {
-                /* Validar disponibilidad de ambas APIs en paralelo (una sola vez) */
-                var tareaGeoTime  = geoConnect.ApiDisponible();
-                var tareaTicoFrut = ticoFrutConnect.ApiDisponible();
-
-                geoTimeOk    = await tareaGeoTime;
+                /* Validar disponibilidad de la API de Geotime (una sola vez) */
+                geoTimeOk    = await geoConnect.ApiDisponible();
                 Desconectado = geoTimeOk != true;
                 StateHasChanged();
-
-                _ = tareaTicoFrut.ContinueWith(t => InvokeAsync(() =>
-                {
-                    ticoFrutOk = t.IsCompletedSuccessfully && t.Result;
-                    StateHasChanged();
-                }));
 
                 cPortal_Config? portal_Config = null;
                 if (!Desconectado)

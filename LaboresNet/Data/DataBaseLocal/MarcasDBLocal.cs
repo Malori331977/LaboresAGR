@@ -4,7 +4,6 @@ using PortalEmpleadoGeotime.Client.Modelo;
 using SQLite;
 using System.Linq;
 using System.Runtime.CompilerServices;
-using TicoFrutLibs.Models;
 
 
 namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
@@ -12,15 +11,18 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
     public class MarcasDBLocal
     {
         public static MarcasDBLocal instance;
+
+        /// <summary>Nombre de la base local (carpeta y archivo .db3). Distinto de la base anterior "AvancesMoDB\LaboresDatabase.db3".</summary>
+        public const string NombreBaseLocal = "LaboresAGR";
         readonly SQLiteAsyncConnection database;
 
         public MarcasDBLocal()
         {
             try
             {
-                string dbFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AvancesMoDB");
+                string dbFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), NombreBaseLocal);
                 Directory.CreateDirectory(dbFolder);
-                string dbPath = Path.Combine(dbFolder, "LaboresDatabase.db3");
+                string dbPath = Path.Combine(dbFolder, $"{NombreBaseLocal}.db3");
 
                 database = new SQLiteAsyncConnection(dbPath);
                 // Use local table definitions that store single-char values as string
@@ -71,54 +73,57 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
                     PRIMARY KEY (ID)
                 );").Wait();
 
-                // ── TicoFrut tables ──────────────────────────────────────────────
-                database.ExecuteAsync(@"CREATE TABLE IF NOT EXISTS GeoAgrFinca (
-                    Compania TEXT NOT NULL,
-                    Pais     TEXT NOT NULL,
-                    Bloque   TEXT NOT NULL,
-                    Finca    TEXT NOT NULL,
-                    PRIMARY KEY (Compania, Pais, Bloque, Finca)
+                // ── Catálogos de labores (Geotime: Ph_Labores*) ─────────────────
+                database.ExecuteAsync(@"CREATE TABLE IF NOT EXISTS LaboresBloque (
+                    Id          TEXT NOT NULL,
+                    Descripcion TEXT,
+                    PRIMARY KEY (Id)
                 );").Wait();
 
-                database.ExecuteAsync(@"CREATE TABLE IF NOT EXISTS GeoAgrLote (
-                    Compania  TEXT NOT NULL,
-                    Bloque    TEXT NOT NULL,
-                    Finca     TEXT NOT NULL,
-                    Lote      TEXT NOT NULL,
-                    Pais      TEXT,
-                    TipoSuelo TEXT,
-                    Variedad  TEXT,
-                    PRIMARY KEY (Compania, Bloque, Finca, Lote)
+                database.ExecuteAsync(@"CREATE TABLE IF NOT EXISTS LaboresFinca (
+                    BloqueId    TEXT NOT NULL,
+                    Id          TEXT NOT NULL,
+                    Descripcion TEXT,
+                    PRIMARY KEY (BloqueId, Id)
                 );").Wait();
 
-                database.ExecuteAsync(@"CREATE TABLE IF NOT EXISTS GeoAgrOt (
-                    Compania TEXT NOT NULL,
-                    Bloque   TEXT NOT NULL,
-                    Finca    TEXT NOT NULL,
-                    Ot       TEXT NOT NULL,
-                    NombreOt TEXT,
-                    PRIMARY KEY (Compania, Bloque, Finca, Ot)
+                database.ExecuteAsync(@"CREATE TABLE IF NOT EXISTS LaboresLote (
+                    BloqueId    TEXT NOT NULL,
+                    FincaId     TEXT NOT NULL,
+                    Id          TEXT NOT NULL,
+                    Descripcion TEXT,
+                    PRIMARY KEY (BloqueId, FincaId, Id)
                 );").Wait();
 
-                database.ExecuteAsync(@"CREATE TABLE IF NOT EXISTS GeoAgrOtLabor (
-                    Compania    TEXT NOT NULL,
-                    Bloque      TEXT NOT NULL,
-                    Finca       TEXT NOT NULL,
-                    Ot          TEXT NOT NULL,
-                    Labor       TEXT NOT NULL,
-                    NombreLabor TEXT,
-                    PRIMARY KEY (Compania, Bloque, Finca, Ot, Labor)
+                database.ExecuteAsync(@"CREATE TABLE IF NOT EXISTS LaboresOrdenTrabajo (
+                    BloqueId    TEXT NOT NULL,
+                    FincaId     TEXT NOT NULL,
+                    Id          TEXT NOT NULL,
+                    Descripcion TEXT,
+                    PRIMARY KEY (BloqueId, FincaId, Id)
                 );").Wait();
-                //database.ExecuteAsync("DROP TABLE IF EXISTS GeoAgrRecursoConcepto").Wait();
-                database.ExecuteAsync(@"CREATE TABLE IF NOT EXISTS GeoAgrRecursoConcepto (
-                    Compania     TEXT NOT NULL,
-                    Recurso      TEXT NOT NULL,
-                    Descripcion  TEXT,
-                    TipoFactorMo TEXT,
-                    FactorMo     REAL,
-                    ConceptoMo   TEXT,
-                    Unidad   TEXT,
-                    PRIMARY KEY (Compania, Recurso)
+
+                database.ExecuteAsync(@"CREATE TABLE IF NOT EXISTS LaboresActividad (
+                    BloqueId       TEXT NOT NULL,
+                    FincaId        TEXT NOT NULL,
+                    OrdenTrabajoId TEXT NOT NULL,
+                    Id             TEXT NOT NULL,
+                    Descripcion    TEXT,
+                    PRIMARY KEY (BloqueId, FincaId, OrdenTrabajoId, Id)
+                );").Wait();
+
+                database.ExecuteAsync(@"CREATE TABLE IF NOT EXISTS LaboresUnidad (
+                    Id          TEXT NOT NULL,
+                    Descripcion TEXT,
+                    PRIMARY KEY (Id)
+                );").Wait();
+
+                database.ExecuteAsync(@"CREATE TABLE IF NOT EXISTS LaboresRecurso (
+                    Id          TEXT NOT NULL,
+                    Descripcion TEXT,
+                    IdConcepto  INTEGER NOT NULL,
+                    UnidadId    TEXT NOT NULL,
+                    PRIMARY KEY (Id)
                 );").Wait();
 
                 // Migración: recrear tablas con IdRegistro como parte de la PK compuesta.
@@ -137,17 +142,15 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
 
                 database.ExecuteAsync(@"CREATE TABLE IF NOT EXISTS GeoAgrLaborAuxiliar (
                     IdRegistro  INTEGER NOT NULL,
-                    Compania    TEXT    NOT NULL,
                     IdEmpleado  TEXT    NOT NULL,
                     Fecha       TEXT    NOT NULL,
                     Comentarios TEXT,
                     EstadoId    INTEGER NOT NULL,
-                    PRIMARY KEY (IdRegistro, Compania, IdEmpleado, Fecha)
+                    PRIMARY KEY (IdRegistro, IdEmpleado, Fecha)
                 );").Wait();
 
                 database.ExecuteAsync(@"CREATE TABLE IF NOT EXISTS GeoAgrLaborAuxiliarDet (
                     IdRegistro          INTEGER NOT NULL,
-                    Compania            TEXT    NOT NULL,
                     IdEmpleado          TEXT    NOT NULL,
                     Fecha               TEXT    NOT NULL,
                     Item                INTEGER NOT NULL,
@@ -162,13 +165,25 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
                     HorasAprobadas      REAL,
                     EstadoId            INTEGER NOT NULL,
                     IdEmpleadoAsignado  TEXT    NOT NULL,
-                    PRIMARY KEY (IdRegistro, Compania, IdEmpleado, Fecha, Item, IdEmpleadoAsignado),
-                    FOREIGN KEY (IdRegistro, Compania, IdEmpleado, Fecha)
-                        REFERENCES GeoAgrLaborAuxiliar (IdRegistro, Compania, IdEmpleado, Fecha)
+                    PRIMARY KEY (IdRegistro, IdEmpleado, Fecha, Item, IdEmpleadoAsignado),
+                    FOREIGN KEY (IdRegistro, IdEmpleado, Fecha)
+                        REFERENCES GeoAgrLaborAuxiliar (IdRegistro, IdEmpleado, Fecha)
                         ON DELETE CASCADE
                 );").Wait();
 
-                database.CreateTableAsync<FiltroUsuarioLocal>().Wait();
+
+                database.ExecuteAsync(@"CREATE TABLE IF NOT EXISTS MigracionLabores (
+                    Id            INTEGER NOT NULL,
+                    Fecha         TEXT    NOT NULL,
+                    MaxIdRegistro INTEGER NOT NULL DEFAULT 0,
+                    PRIMARY KEY (Id)
+                );").Wait();
+
+                // Bases creadas antes de existir la columna de semilla.
+                try { database.ExecuteAsync("ALTER TABLE MigracionLabores ADD COLUMN MaxIdRegistro INTEGER NOT NULL DEFAULT 0").Wait(); }
+                catch { /* la columna ya existe */ }
+
+                MigrarDesdeBaseAnterior();
 
             }
             catch(Exception e)
@@ -177,6 +192,194 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
                 throw;
             }
             
+        }
+
+        // ════════════════════════════════════════════════════════════════════════
+        // Catálogos de labores (Geotime: Ph_Labores*)
+        // ════════════════════════════════════════════════════════════════════════
+
+        public async Task<List<cPh_LaboresBloque>> GetLaboresBloquesAsync()
+        {
+            var locals = await database.Table<LaboresBloqueLocal>().ToListAsync();
+            return locals.Select(l => new cPh_LaboresBloque { Id = l.Id, Descripcion = l.Descripcion ?? "", Estado = true })
+                         .OrderBy(l => l.Id).ToList();
+        }
+
+        public async Task<List<cPh_LaboresFinca>> GetLaboresFincasAsync()
+        {
+            var locals = await database.Table<LaboresFincaLocal>().ToListAsync();
+            return locals.Select(l => new cPh_LaboresFinca { BloqueId = l.BloqueId, Id = l.Id, Descripcion = l.Descripcion ?? "", Estado = true })
+                         .OrderBy(l => l.BloqueId).ThenBy(l => l.Id).ToList();
+        }
+
+        public async Task<List<cPh_LaboresLote>> GetLaboresLotesAsync()
+        {
+            var locals = await database.Table<LaboresLoteLocal>().ToListAsync();
+            return locals.Select(l => new cPh_LaboresLote { BloqueId = l.BloqueId, FincaId = l.FincaId, Id = l.Id, Descripcion = l.Descripcion ?? "", Estado = true })
+                         .OrderBy(l => l.BloqueId).ThenBy(l => l.FincaId).ThenBy(l => l.Id).ToList();
+        }
+
+        public async Task<List<cPh_LaboresOrdenTrabajo>> GetLaboresOrdenesTrabajoAsync()
+        {
+            var locals = await database.Table<LaboresOrdenTrabajoLocal>().ToListAsync();
+            return locals.Select(l => new cPh_LaboresOrdenTrabajo { BloqueId = l.BloqueId, FincaId = l.FincaId, Id = l.Id, Descripcion = l.Descripcion ?? "", Estado = true })
+                         .OrderBy(l => l.BloqueId).ThenBy(l => l.FincaId).ThenBy(l => l.Id).ToList();
+        }
+
+        public async Task<List<cPh_LaboresActividad>> GetLaboresActividadesAsync()
+        {
+            var locals = await database.Table<LaboresActividadLocal>().ToListAsync();
+            return locals.Select(l => new cPh_LaboresActividad { BloqueId = l.BloqueId, FincaId = l.FincaId, OrdenTrabajoId = l.OrdenTrabajoId, Id = l.Id, Descripcion = l.Descripcion ?? "", Estado = true })
+                         .OrderBy(l => l.BloqueId).ThenBy(l => l.FincaId).ThenBy(l => l.OrdenTrabajoId).ThenBy(l => l.Id).ToList();
+        }
+
+        public async Task<List<cPh_LaboresUnidad>> GetLaboresUnidadesAsync()
+        {
+            var locals = await database.Table<LaboresUnidadLocal>().ToListAsync();
+            return locals.Select(l => new cPh_LaboresUnidad { Id = l.Id, Descripcion = l.Descripcion ?? "", Estado = true })
+                         .OrderBy(l => l.Id).ToList();
+        }
+
+        public async Task<List<cPh_LaboresRecurso>> GetLaboresRecursosAsync()
+        {
+            var locals = await database.Table<LaboresRecursoLocal>().ToListAsync();
+            return locals.Select(l => new cPh_LaboresRecurso { Id = l.Id, Descripcion = l.Descripcion ?? "", IdConcepto = l.IdConcepto, UnidadId = l.UnidadId, Estado = true })
+                         .OrderBy(l => l.Descripcion).ToList();
+        }
+
+        /// <summary>
+        /// Reemplaza los siete catálogos en una sola transacción: o quedan todos actualizados o ninguno.
+        /// Solo se guardan los registros con Estado = true.
+        /// </summary>
+        public async Task SaveLaboresCatalogosAsync(
+            IEnumerable<cPh_LaboresBloque> bloques,
+            IEnumerable<cPh_LaboresFinca> fincas,
+            IEnumerable<cPh_LaboresLote> lotes,
+            IEnumerable<cPh_LaboresOrdenTrabajo> ordenes,
+            IEnumerable<cPh_LaboresActividad> actividades,
+            IEnumerable<cPh_LaboresUnidad> unidades,
+            IEnumerable<cPh_LaboresRecurso> recursos)
+        {
+            var lBloques = bloques.Where(x => x.Estado)
+                .Select(x => new LaboresBloqueLocal { Id = x.Id, Descripcion = x.Descripcion }).ToList();
+            var lFincas = fincas.Where(x => x.Estado)
+                .Select(x => new LaboresFincaLocal { BloqueId = x.BloqueId, Id = x.Id, Descripcion = x.Descripcion }).ToList();
+            var lLotes = lotes.Where(x => x.Estado)
+                .Select(x => new LaboresLoteLocal { BloqueId = x.BloqueId, FincaId = x.FincaId, Id = x.Id, Descripcion = x.Descripcion }).ToList();
+            var lOrdenes = ordenes.Where(x => x.Estado)
+                .Select(x => new LaboresOrdenTrabajoLocal { BloqueId = x.BloqueId, FincaId = x.FincaId, Id = x.Id, Descripcion = x.Descripcion }).ToList();
+            var lActividades = actividades.Where(x => x.Estado)
+                .Select(x => new LaboresActividadLocal { BloqueId = x.BloqueId, FincaId = x.FincaId, OrdenTrabajoId = x.OrdenTrabajoId, Id = x.Id, Descripcion = x.Descripcion }).ToList();
+            var lUnidades = unidades.Where(x => x.Estado)
+                .Select(x => new LaboresUnidadLocal { Id = x.Id, Descripcion = x.Descripcion }).ToList();
+            var lRecursos = recursos.Where(x => x.Estado)
+                .Select(x => new LaboresRecursoLocal { Id = x.Id, Descripcion = x.Descripcion, IdConcepto = x.IdConcepto, UnidadId = x.UnidadId }).ToList();
+
+            await database.RunInTransactionAsync(db =>
+            {
+                db.DeleteAll<LaboresBloqueLocal>();
+                db.DeleteAll<LaboresFincaLocal>();
+                db.DeleteAll<LaboresLoteLocal>();
+                db.DeleteAll<LaboresOrdenTrabajoLocal>();
+                db.DeleteAll<LaboresActividadLocal>();
+                db.DeleteAll<LaboresUnidadLocal>();
+                db.DeleteAll<LaboresRecursoLocal>();
+
+                db.InsertAll(lBloques);
+                db.InsertAll(lFincas);
+                db.InsertAll(lLotes);
+                db.InsertAll(lOrdenes);
+                db.InsertAll(lActividades);
+                db.InsertAll(lUnidades);
+                db.InsertAll(lRecursos);
+            });
+        }
+
+        /// <summary>
+        /// Copia, una sola vez, desde la base anterior (AvancesMoDB\LaboresDatabase.db3, solo lectura):
+        /// la configuración de las APIs y las labores auxiliares no finalizadas (EstadoId distinto de 2 y 99).
+        /// Cada paso es tolerante: la base anterior puede no existir o ser de otra aplicación.
+        /// </summary>
+        private void MigrarDesdeBaseAnterior()
+        {
+            try
+            {
+                var yaMigrado = database.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM MigracionLabores WHERE Id = 1").Result;
+                if (yaMigrado > 0) return;
+
+                string rutaAnterior = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "AvancesMoDB", "LaboresDatabase.db3");
+
+                long semilla = 0;
+
+                if (File.Exists(rutaAnterior))
+                {
+                    try
+                    {
+                        using var anterior = new SQLiteConnection(rutaAnterior, SQLiteOpenFlags.ReadOnly);
+
+                        bool Existe(string tabla) =>
+                            anterior.ExecuteScalar<int>("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?", tabla) > 0;
+
+                        // 1. Configuración de las APIs (la tabla de esta clase es "ParametroApi").
+                        if (Existe("ParametroApi"))
+                        {
+                            var cfg = anterior.Query<cParametroApiLocal>("SELECT * FROM ParametroApi WHERE Id = 1").FirstOrDefault();
+                            var yaTiene = database.Table<cParametroApiLocal>().FirstOrDefaultAsync(p => p.Id == 1).Result;
+                            if (cfg is not null && yaTiene is null)
+                                database.InsertAsync(cfg).Wait();
+                        }
+
+                        // 2. Semilla de IdRegistro: el mayor id de la base anterior (incluye finalizadas).
+                        if (Existe("GeoAgrLaborAuxiliar"))
+                            semilla = anterior.ExecuteScalar<long>("SELECT IFNULL(MAX(IdRegistro), 0) FROM GeoAgrLaborAuxiliar");
+
+                        // 3. Labores auxiliares no finalizadas y sus detalles.
+                        if (Existe("GeoAgrLaborAuxiliar") && Existe("GeoAgrLaborAuxiliarDet"))
+                        {
+                            var encabezados = anterior.Query<GeoAgrLaborAuxiliarLocal>(
+                                "SELECT * FROM GeoAgrLaborAuxiliar WHERE EstadoId NOT IN (2, 99)");
+                            var detalles = anterior.Query<GeoAgrLaborAuxiliarDetLocal>(
+                                @"SELECT d.* FROM GeoAgrLaborAuxiliarDet d
+                                  JOIN GeoAgrLaborAuxiliar h ON h.IdRegistro = d.IdRegistro
+                                  WHERE h.EstadoId NOT IN (2, 99)");
+
+                            database.RunInTransactionAsync(db =>
+                            {
+                                foreach (var h in encabezados)
+                                    db.Execute(
+                                        "INSERT OR IGNORE INTO GeoAgrLaborAuxiliar (IdRegistro, IdEmpleado, Fecha, Comentarios, EstadoId) VALUES (?,?,?,?,?)",
+                                        h.IdRegistro, h.IdEmpleado, h.Fecha, h.Comentarios, h.EstadoId);
+
+                                foreach (var d in detalles)
+                                    db.Execute(
+                                        @"INSERT OR IGNORE INTO GeoAgrLaborAuxiliarDet
+                                          (IdRegistro, IdEmpleado, Fecha, Item, Bloque, Finca, Lote, Ot, Labor, Recurso,
+                                           CantidadRendimiento, Unidad, HorasAprobadas, EstadoId, IdEmpleadoAsignado)
+                                          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                                        d.IdRegistro, d.IdEmpleado, d.Fecha, d.Item, d.Bloque, d.Finca, d.Lote, d.Ot,
+                                        d.Labor, d.Recurso, d.CantidadRendimiento, d.Unidad, d.HorasAprobadas,
+                                        d.EstadoId, d.IdEmpleadoAsignado);
+                            }).Wait();
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        // Base anterior bloqueada, corrupta o con otro esquema: se continúa con tablas vacías.
+                        Console.WriteLine($"MigrarDesdeBaseAnterior: {e.Message}");
+                    }
+                }
+
+                database.ExecuteAsync(
+                    "INSERT OR REPLACE INTO MigracionLabores (Id, Fecha, MaxIdRegistro) VALUES (1, ?, ?)",
+                    DateTime.Now.ToString("yyyyMMddHHmmss"), semilla).Wait();
+            }
+            catch (Exception e)
+            {
+                // Nunca debe impedir el arranque de la app.
+                Console.WriteLine($"MigrarDesdeBaseAnterior (control): {e.Message}");
+            }
         }
 
         private cEmpleado MapEmpleadoLocalToEmpleado(cEmpleadoLocal l)
@@ -2557,8 +2760,6 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
                 ApiClientId = l.ApiClientId,
                 ApiUser = l.ApiUser,
                 ApiPassword = l.ApiPassword,
-                ApiAuxiliarSchema = l.ApiAuxiliarSchema,
-                ApiAuxiliarUrl = l.ApiAuxiliarUrl,
             };
         }
 
@@ -2577,8 +2778,6 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
                     model.ApiClientId = parametro.ApiClientId;
                     model.ApiUser = parametro.ApiUser;
                     model.ApiPassword = parametro.ApiPassword;
-                    model.ApiAuxiliarSchema = parametro.ApiAuxiliarSchema;
-                    model.ApiAuxiliarUrl = parametro.ApiAuxiliarUrl;
 
                     return await database.UpdateAsync(model);
                 }
@@ -2595,576 +2794,13 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
         }
 
         // ════════════════════════════════════════════════════════════════════════
-        // TicoFrut — GeoAgrFinca
-        // ════════════════════════════════════════════════════════════════════════
-
-        public async Task<List<GeoAgrFinca>> GetGeoAgrFincaAsync()
-        {
-            var locals = await database.Table<GeoAgrFincaLocal>().ToListAsync();
-            return locals.Select(l => new GeoAgrFinca
-            {
-                Compania = l.Compania,
-                Pais     = l.Pais,
-                Bloque   = l.Bloque,
-                Finca    = l.Finca,
-            }).ToList();
-        }
-
-        public async Task<List<GeoAgrFinca>> GetGeoAgrFincaAsync(string compania, string pais)
-        {
-            var locals = await database.Table<GeoAgrFincaLocal>()
-                .Where(l => l.Compania == compania && l.Pais == pais)
-                .ToListAsync();
-            return locals.Select(l => new GeoAgrFinca
-            {
-                Compania = l.Compania,
-                Pais     = l.Pais,
-                Bloque   = l.Bloque,
-                Finca    = l.Finca,
-            }).ToList();
-        }
-
-        public async Task<GeoAgrFinca?> GetGeoAgrFincaAsync(string compania, string pais, string bloque, string finca)
-        {
-            var l = await database.Table<GeoAgrFincaLocal>()
-                .FirstOrDefaultAsync(i => i.Compania == compania && i.Pais == pais
-                                       && i.Bloque == bloque && i.Finca == finca);
-            if (l is null) return null;
-            return new GeoAgrFinca { Compania = l.Compania, Pais = l.Pais, Bloque = l.Bloque, Finca = l.Finca };
-        }
-
-        public async Task<int> SaveGeoAgrFincaAsync(IEnumerable<GeoAgrFinca> fincas)
-        {
-            var list = fincas.ToList();
-            if (list.Count == 0) return 0;
-
-            var existingLocals = await database.Table<GeoAgrFincaLocal>().ToListAsync();
-            var existingDict   = existingLocals.ToDictionary(l => (l.Compania!, l.Pais!, l.Bloque!, l.Finca!));
-
-            var toInsert = new List<GeoAgrFincaLocal>();
-            var toUpdate = new List<GeoAgrFincaLocal>();
-
-            foreach (var f in list)
-            {
-                if (existingDict.TryGetValue((f.Compania!, f.Pais!, f.Bloque!, f.Finca!), out var local))
-                {
-                    toUpdate.Add(local); // sin campos mutables; registro ya existe
-                }
-                else
-                {
-                    toInsert.Add(new GeoAgrFincaLocal
-                    {
-                        Compania = f.Compania,
-                        Pais     = f.Pais,
-                        Bloque   = f.Bloque,
-                        Finca    = f.Finca,
-                    });
-                }
-            }
-
-            int totalAffected = 0;
-            await database.RunInTransactionAsync(db =>
-            {
-                if (toInsert.Count > 0)
-                    totalAffected += db.InsertAll(toInsert);
-            });
-            return totalAffected;
-        }
-
-        public async Task<bool> DeleteGeoAgrFincaAsync()
-        {
-            await database.ExecuteAsync("DELETE FROM GeoAgrFinca");
-            return true;
-        }
-
-        // ════════════════════════════════════════════════════════════════════════
-        // TicoFrut — GeoAgrLote
-        // ════════════════════════════════════════════════════════════════════════
-
-        public async Task<List<GeoAgrLote>> GetGeoAgrLoteAsync()
-        {
-            var locals = await database.Table<GeoAgrLoteLocal>().ToListAsync();
-            return locals.Select(l => new GeoAgrLote
-            {
-                Compania  = l.Compania,
-                Bloque    = l.Bloque,
-                Finca     = l.Finca,
-                Lote      = l.Lote,
-                Pais      = l.Pais,
-                TipoSuelo = l.TipoSuelo,
-                Variedad  = l.Variedad,
-            }).ToList();
-        }
-
-        public async Task<List<GeoAgrLote>> GetGeoAgrLoteAsync(string compania)
-        {
-            var locals = await database.Table<GeoAgrLoteLocal>()
-                .Where(l => l.Compania == compania)
-                .ToListAsync();
-            return locals.Select(l => new GeoAgrLote
-            {
-                Compania = l.Compania,
-                Bloque = l.Bloque,
-                Finca = l.Finca,
-                Lote = l.Lote,
-                Pais = l.Pais,
-                TipoSuelo = l.TipoSuelo,
-                Variedad = l.Variedad,
-            }).ToList();
-        }
-
-        public async Task<List<GeoAgrLote>> GetGeoAgrLoteAsync(string compania, string bloque, string finca)
-        {
-            var locals = await database.Table<GeoAgrLoteLocal>()
-                .Where(l => l.Compania == compania && l.Bloque == bloque && l.Finca == finca)
-                .ToListAsync();
-            return locals.Select(l => new GeoAgrLote
-            {
-                Compania  = l.Compania,
-                Bloque    = l.Bloque,
-                Finca     = l.Finca,
-                Lote      = l.Lote,
-                Pais      = l.Pais,
-                TipoSuelo = l.TipoSuelo,
-                Variedad  = l.Variedad,
-            }).ToList();
-        }
-
-        public async Task<GeoAgrLote?> GetGeoAgrLoteAsync(string compania, string bloque, string finca, string lote)
-        {
-            var l = await database.Table<GeoAgrLoteLocal>()
-                .FirstOrDefaultAsync(i => i.Compania == compania && i.Bloque == bloque
-                                       && i.Finca == finca && i.Lote == lote);
-            if (l is null) return null;
-            return new GeoAgrLote
-            {
-                Compania  = l.Compania,
-                Bloque    = l.Bloque,
-                Finca     = l.Finca,
-                Lote      = l.Lote,
-                Pais      = l.Pais,
-                TipoSuelo = l.TipoSuelo,
-                Variedad  = l.Variedad,
-            };
-        }
-
-        public async Task<int> SaveGeoAgrLoteAsync(IEnumerable<GeoAgrLote> lotes)
-        {
-            var list = lotes.ToList();
-            if (list.Count == 0) return 0;
-
-            var existingLocals = await database.Table<GeoAgrLoteLocal>().ToListAsync();
-            var existingDict   = existingLocals.ToDictionary(l => (l.Compania!, l.Bloque!, l.Finca!, l.Lote!));
-
-            var toInsert = new List<GeoAgrLoteLocal>();
-            var toUpdate = new List<GeoAgrLoteLocal>();
-
-            foreach (var item in list)
-            {
-                if (existingDict.TryGetValue((item.Compania!, item.Bloque!, item.Finca!, item.Lote!), out var local))
-                {
-                    local.Pais      = item.Pais;
-                    local.TipoSuelo = item.TipoSuelo;
-                    local.Variedad  = item.Variedad;
-                    toUpdate.Add(local);
-                }
-                else
-                {
-                    toInsert.Add(new GeoAgrLoteLocal
-                    {
-                        Compania  = item.Compania,
-                        Bloque    = item.Bloque,
-                        Finca     = item.Finca,
-                        Lote      = item.Lote,
-                        Pais      = item.Pais,
-                        TipoSuelo = item.TipoSuelo,
-                        Variedad  = item.Variedad,
-                    });
-                }
-            }
-
-            int totalAffected = 0;
-            await database.RunInTransactionAsync(db =>
-            {
-                if (toUpdate.Count > 0)
-                    totalAffected += db.Execute(
-                        "UPDATE GeoAgrLote SET Pais=?, TipoSuelo=?, Variedad=? WHERE Compania=? AND Bloque=? AND Finca=? AND Lote=?",
-                        toUpdate.Select(u => new object[] { u.Pais!, u.TipoSuelo!, u.Variedad!, u.Compania!, u.Bloque!, u.Finca!, u.Lote! })
-                                .Aggregate(0, (acc, args) => acc + db.Execute(
-                                    "UPDATE GeoAgrLote SET Pais=?, TipoSuelo=?, Variedad=? WHERE Compania=? AND Bloque=? AND Finca=? AND Lote=?",
-                                    args[0], args[1], args[2], args[3], args[4], args[5], args[6])));
-                if (toInsert.Count > 0)
-                    totalAffected += db.InsertAll(toInsert);
-            });
-            return totalAffected;
-        }
-
-        public async Task<bool> DeleteGeoAgrLoteAsync()
-        {
-            await database.ExecuteAsync("DELETE FROM GeoAgrLote");
-            return true;
-        }
-
-        // ════════════════════════════════════════════════════════════════════════
-        // TicoFrut — GeoAgrOt
-        // ════════════════════════════════════════════════════════════════════════
-
-        public async Task<List<GeoAgrOt>> GetGeoAgrOtAsync()
-        {
-            var locals = await database.Table<GeoAgrOtLocal>().ToListAsync();
-            return locals.Select(l => new GeoAgrOt
-            {
-                Compania = l.Compania,
-                Bloque   = l.Bloque,
-                Finca    = l.Finca,
-                Ot       = l.Ot,
-                NombreOt = l.NombreOt,
-            }).ToList();
-        }
-
-        public async Task<List<GeoAgrOt>> GetGeoAgrOtAsync(string compania)
-        {
-            var locals = await database.Table<GeoAgrOtLocal>()
-                .Where(l => l.Compania == compania)
-                .ToListAsync();
-            return locals.Select(l => new GeoAgrOt
-            {
-                Compania = l.Compania,
-                Bloque = l.Bloque,
-                Finca = l.Finca,
-                Ot = l.Ot,
-                NombreOt = l.NombreOt,
-            }).ToList();
-        }
-
-        public async Task<List<GeoAgrOt>> GetGeoAgrOtAsync(string compania, string bloque, string finca)
-        {
-            var locals = await database.Table<GeoAgrOtLocal>()
-                .Where(l => l.Compania == compania && l.Bloque == bloque && l.Finca == finca)
-                .ToListAsync();
-            return locals.Select(l => new GeoAgrOt
-            {
-                Compania = l.Compania,
-                Bloque   = l.Bloque,
-                Finca    = l.Finca,
-                Ot       = l.Ot,
-                NombreOt = l.NombreOt,
-            }).ToList();
-        }
-
-        public async Task<GeoAgrOt?> GetGeoAgrOtAsync(string compania, string bloque, string finca, string ot)
-        {
-            var l = await database.Table<GeoAgrOtLocal>()
-                .FirstOrDefaultAsync(i => i.Compania == compania && i.Bloque == bloque
-                                       && i.Finca == finca && i.Ot == ot);
-            if (l is null) return null;
-            return new GeoAgrOt
-            {
-                Compania = l.Compania, Bloque = l.Bloque,
-                Finca    = l.Finca,   Ot     = l.Ot, NombreOt = l.NombreOt,
-            };
-        }
-
-        public async Task<int> SaveGeoAgrOtAsync(IEnumerable<GeoAgrOt> ots)
-        {
-            var list = ots.ToList();
-            if (list.Count == 0) return 0;
-
-            var existingLocals = await database.Table<GeoAgrOtLocal>().ToListAsync();
-            var existingDict   = existingLocals.ToDictionary(l => (l.Compania!, l.Bloque!, l.Finca!, l.Ot!));
-
-            var toInsert = new List<GeoAgrOtLocal>();
-            var toUpdate = new List<GeoAgrOtLocal>();
-
-            foreach (var item in list)
-            {
-                item.Bloque = item.Bloque ?? "";
-                if (existingDict.TryGetValue((item.Compania!, item.Bloque!, item.Finca!, item.Ot!), out var local))
-                {
-                    local.NombreOt = item.NombreOt;
-                    toUpdate.Add(local);
-                }
-                else
-                {
-                    toInsert.Add(new GeoAgrOtLocal
-                    {
-                        Compania = item.Compania,
-                        Bloque   = item.Bloque??"",
-                        Finca    = item.Finca,
-                        Ot       = item.Ot,
-                        NombreOt = item.NombreOt,
-                    });
-                }
-            }
-
-            int totalAffected = 0;
-            await database.RunInTransactionAsync(db =>
-            {
-                foreach (var u in toUpdate)
-                    db.Execute("UPDATE GeoAgrOt SET NombreOt=? WHERE Compania=? AND Bloque=? AND Finca=? AND Ot=?",
-                               u.NombreOt, u.Compania, u.Bloque, u.Finca, u.Ot);
-                if (toInsert.Count > 0)
-                    totalAffected += db.InsertAll(toInsert);
-            });
-            return totalAffected;
-        }
-
-        public async Task<bool> DeleteGeoAgrOtAsync()
-        {
-            await database.ExecuteAsync("DELETE FROM GeoAgrOt");
-            return true;
-        }
-
-        // ════════════════════════════════════════════════════════════════════════
-        // TicoFrut — GeoAgrOtLabor
-        // ════════════════════════════════════════════════════════════════════════
-
-        public async Task<List<GeoAgrOtLabor>> GetGeoAgrOtLaborAsync()
-        {
-            var locals = await database.Table<GeoAgrOtLaborLocal>().ToListAsync();
-            return locals.Select(l => new GeoAgrOtLabor
-            {
-                Compania    = l.Compania,
-                Bloque      = l.Bloque,
-                Finca       = l.Finca,
-                Ot          = l.Ot,
-                Labor       = l.Labor,
-                NombreLabor = l.NombreLabor,
-            }).ToList();
-        }
-
-        public async Task<List<GeoAgrOtLabor>> GetGeoAgrOtLaborAsync(string compania, string bloque, string finca)
-        {
-            var locals = await database.Table<GeoAgrOtLaborLocal>()
-                .Where(l => l.Compania == compania && l.Bloque == bloque && l.Finca == finca)
-                .ToListAsync();
-            return locals.Select(l => new GeoAgrOtLabor
-            {
-                Compania    = l.Compania,
-                Bloque      = l.Bloque,
-                Finca       = l.Finca,
-                Ot          = l.Ot,
-                Labor       = l.Labor,
-                NombreLabor = l.NombreLabor,
-            }).ToList();
-        }
-
-        public async Task<List<GeoAgrOtLabor>> GetGeoAgrOtLaborAsync(string compania)
-        {
-            var locals = await database.Table<GeoAgrOtLaborLocal>()
-                .Where(l => l.Compania == compania)
-                .ToListAsync();
-            return locals.Select(l => new GeoAgrOtLabor
-            {
-                Compania = l.Compania,
-                Bloque = l.Bloque,
-                Finca = l.Finca,
-                Ot = l.Ot,
-                Labor = l.Labor,
-                NombreLabor = l.NombreLabor,
-            }).ToList();
-        }
-
-        public async Task<List<GeoAgrOtLabor>> GetGeoAgrOtLaborAsync(string compania, string bloque, string finca, string ot)
-        {
-            var locals = await database.Table<GeoAgrOtLaborLocal>()
-                .Where(l => l.Compania == compania && l.Bloque == bloque
-                         && l.Finca == finca && l.Ot == ot)
-                .ToListAsync();
-            return locals.Select(l => new GeoAgrOtLabor
-            {
-                Compania    = l.Compania,
-                Bloque      = l.Bloque,
-                Finca       = l.Finca,
-                Ot          = l.Ot,
-                Labor       = l.Labor,
-                NombreLabor = l.NombreLabor,
-            }).ToList();
-        }
-
-        public async Task<GeoAgrOtLabor?> GetGeoAgrOtLaborAsync(string compania, string bloque, string finca, string ot, string labor)
-        {
-            var l = await database.Table<GeoAgrOtLaborLocal>()
-                .FirstOrDefaultAsync(i => i.Compania == compania && i.Bloque == bloque
-                                       && i.Finca == finca && i.Ot == ot && i.Labor == labor);
-            if (l is null) return null;
-            return new GeoAgrOtLabor
-            {
-                Compania    = l.Compania, Bloque = l.Bloque, Finca = l.Finca,
-                Ot          = l.Ot,      Labor  = l.Labor,  NombreLabor = l.NombreLabor,
-            };
-        }
-
-        public async Task<int> SaveGeoAgrOtLaborAsync(IEnumerable<GeoAgrOtLabor> labores)
-        {
-            var list = labores.ToList();
-            if (list.Count == 0) return 0;
-
-            var existingLocals = await database.Table<GeoAgrOtLaborLocal>().ToListAsync();
-            var existingDict   = existingLocals.ToDictionary(l => (l.Compania!, l.Bloque!, l.Finca!, l.Ot!, l.Labor!));
-
-            var toInsert = new List<GeoAgrOtLaborLocal>();
-            var toUpdate = new List<GeoAgrOtLaborLocal>();
-
-            foreach (var item in list)
-            {
-                item.Bloque = item.Bloque ?? "";
-                if (existingDict.TryGetValue((item.Compania!, item.Bloque!, item.Finca!, item.Ot!, item.Labor!), out var local))
-                {
-                    local.NombreLabor = item.NombreLabor;
-                    toUpdate.Add(local);
-                }
-                else
-                {
-                    toInsert.Add(new GeoAgrOtLaborLocal
-                    {
-                        Compania    = item.Compania,
-                        Bloque      = item.Bloque,
-                        Finca       = item.Finca,
-                        Ot          = item.Ot,
-                        Labor       = item.Labor,
-                        NombreLabor = item.NombreLabor,
-                    });
-                }
-            }
-
-            int totalAffected = 0;
-            await database.RunInTransactionAsync(db =>
-            {
-                foreach (var u in toUpdate)
-                    db.Execute(
-                        "UPDATE GeoAgrOtLabor SET NombreLabor=? WHERE Compania=? AND Bloque=? AND Finca=? AND Ot=? AND Labor=?",
-                        u.NombreLabor, u.Compania, u.Bloque, u.Finca, u.Ot, u.Labor);
-                if (toInsert.Count > 0)
-                    totalAffected += db.InsertAll(toInsert);
-            });
-            return totalAffected;
-        }
-
-        public async Task<bool> DeleteGeoAgrOtLaborAsync()
-        {
-            await database.ExecuteAsync("DELETE FROM GeoAgrOtLabor");
-            return true;
-        }
-
-        // ════════════════════════════════════════════════════════════════════════
-        // TicoFrut — GeoAgrRecursoConcepto
-        // ════════════════════════════════════════════════════════════════════════
-
-        public async Task<List<GeoAgrRecursoConcepto>> GetGeoAgrRecursoConceptoAsync()
-        {
-            var locals = await database.Table<GeoAgrRecursoConceptoLocal>().ToListAsync();
-            return locals.Select(l => new GeoAgrRecursoConcepto
-            {
-                Compania     = l.Compania,
-                Recurso      = l.Recurso,
-                Descripcion  = l.Descripcion,
-                TipoFactorMo = l.TipoFactorMo,
-                FactorMo     = l.FactorMo,
-                ConceptoMo   = l.ConceptoMo,
-                Unidad       = l.Unidad,
-            }).ToList();
-        }
-
-        public async Task<List<GeoAgrRecursoConcepto>> GetGeoAgrRecursoConceptoAsync(string compania)
-        {
-            var locals = await database.Table<GeoAgrRecursoConceptoLocal>()
-                .Where(l => l.Compania == compania)
-                .ToListAsync();
-            return locals.Select(l => new GeoAgrRecursoConcepto
-            {
-                Compania = l.Compania,
-                Recurso = l.Recurso,
-                Descripcion = l.Descripcion,
-                TipoFactorMo = l.TipoFactorMo,
-                FactorMo = l.FactorMo,
-                ConceptoMo = l.ConceptoMo,
-                Unidad = l.Unidad,
-            }).ToList();
-        }
-
-        public async Task<GeoAgrRecursoConcepto?> GetGeoAgrRecursoConceptoAsync(string compania, string recurso)
-        {
-            var l = await database.Table<GeoAgrRecursoConceptoLocal>()
-                .FirstOrDefaultAsync(i => i.Compania == compania && i.Recurso == recurso);
-            if (l is null) return null;
-            return new GeoAgrRecursoConcepto
-            {
-                Compania     = l.Compania,
-                Recurso      = l.Recurso,
-                Descripcion  = l.Descripcion,
-                TipoFactorMo = l.TipoFactorMo,
-                FactorMo     = l.FactorMo,
-                ConceptoMo   = l.ConceptoMo,
-                Unidad = l.Unidad,
-            };
-        }
-
-        public async Task<int> SaveGeoAgrRecursoConceptoAsync(IEnumerable<GeoAgrRecursoConcepto> recursos)
-        {
-            var list = recursos.ToList();
-            if (list.Count == 0) return 0;
-
-            var existingLocals = await database.Table<GeoAgrRecursoConceptoLocal>().ToListAsync();
-            var existingDict   = existingLocals.ToDictionary(l => (l.Compania!, l.Recurso!));
-
-            var toInsert = new List<GeoAgrRecursoConceptoLocal>();
-            var toUpdate = new List<GeoAgrRecursoConceptoLocal>();
-
-            foreach (var item in list)
-            {
-                if (existingDict.TryGetValue((item.Compania!, item.Recurso!), out var local))
-                {
-                    local.Descripcion  = item.Descripcion;
-                    local.TipoFactorMo = item.TipoFactorMo;
-                    local.FactorMo     = item.FactorMo;
-                    local.ConceptoMo   = item.ConceptoMo;
-                    local.Unidad       = item.Unidad;
-                    toUpdate.Add(local);
-                }
-                else
-                {
-                    toInsert.Add(new GeoAgrRecursoConceptoLocal
-                    {
-                        Compania     = item.Compania,
-                        Recurso      = item.Recurso,
-                        Descripcion  = item.Descripcion,
-                        TipoFactorMo = item.TipoFactorMo,
-                        FactorMo     = item.FactorMo,
-                        ConceptoMo   = item.ConceptoMo,
-                        Unidad       = item.Unidad,  
-                    });
-                }
-            }
-
-            int totalAffected = 0;
-            await database.RunInTransactionAsync(db =>
-            {
-                foreach (var u in toUpdate)
-                    db.Execute(
-                        "UPDATE GeoAgrRecursoConcepto SET Descripcion=?, TipoFactorMo=?, FactorMo=?, ConceptoMo=?, Unidad=? WHERE Compania=? AND Recurso=?",
-                        u.Descripcion, u.TipoFactorMo, u.FactorMo, u.ConceptoMo, u.Unidad, u.Compania, u.Recurso);
-                if (toInsert.Count > 0)
-                    totalAffected += db.InsertAll(toInsert);
-            });
-            return totalAffected;
-        }
-
-        public async Task<bool> DeleteGeoAgrRecursoConceptoAsync()
-        {
-            await database.ExecuteAsync("DELETE FROM GeoAgrRecursoConcepto");
-            return true;
-        }
-
-        // ════════════════════════════════════════════════════════════════════════
-        // TicoFrut — GeoAgrLaborAuxiliar
+        // GeoAgrLaborAuxiliar
         // ════════════════════════════════════════════════════════════════════════
 
         private static GeoAgrLaborAuxiliar MapLocalToAuxiliar(GeoAgrLaborAuxiliarLocal l) =>
             new GeoAgrLaborAuxiliar
             {
                 IdRegistro  = l.IdRegistro,
-                Compania    = l.Compania!,
                 IdEmpleado  = l.IdEmpleado!,
                 Fecha       = l.Fecha,
                 Comentarios = l.Comentarios,
@@ -3177,30 +2813,28 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
             return locals.Select(MapLocalToAuxiliar).ToList();
         }
 
-        public async Task<List<GeoAgrLaborAuxiliar>> GetGeoAgrLaborAuxiliarAsync(string compania, string idEmpleado)
+        public async Task<List<GeoAgrLaborAuxiliar>> GetGeoAgrLaborAuxiliarAsync(string idEmpleado)
         {
             var locals = await database.Table<GeoAgrLaborAuxiliarLocal>()
-                .Where(l => l.Compania == compania && l.IdEmpleado == idEmpleado)
+                .Where(l => l.IdEmpleado == idEmpleado)
                 .ToListAsync();
             return locals.Select(MapLocalToAuxiliar).ToList();
         }
 
-        public async Task<GeoAgrLaborAuxiliar?> GetGeoAgrLaborAuxiliarAsync(string compania, string idEmpleado, DateTime fecha, long idRegistro)
+        public async Task<GeoAgrLaborAuxiliar?> GetGeoAgrLaborAuxiliarAsync(string idEmpleado, DateTime fecha, long idRegistro)
         {
             var l = await database.Table<GeoAgrLaborAuxiliarLocal>()
-                .FirstOrDefaultAsync(i => i.Compania == compania
-                                       && i.IdEmpleado == idEmpleado
+                .FirstOrDefaultAsync(i => i.IdEmpleado == idEmpleado
                                        && i.Fecha == fecha
                                        && i.IdRegistro == idRegistro);
             return l is null ? null : MapLocalToAuxiliar(l);
         }
 
-        public async Task<List<GeoAgrLaborAuxiliar>> GetGeoAgrLaborAuxiliarAsync(string compania, string idEmpleado, DateTime fechaInicio, DateTime fechaFinal)
+        public async Task<List<GeoAgrLaborAuxiliar>> GetGeoAgrLaborAuxiliarAsync(string idEmpleado, DateTime fechaInicio, DateTime fechaFinal)
         {
             var locals = await database.Table<GeoAgrLaborAuxiliarLocal>()
-                .Where(i => i.Compania == compania
-                            && i.IdEmpleado == idEmpleado
-                            && i.Fecha >= fechaInicio 
+                .Where(i => i.IdEmpleado == idEmpleado
+                            && i.Fecha >= fechaInicio
                             && i.Fecha <= fechaFinal
                             && (i.EstadoId != 99 && i.EstadoId != 100))
                 .ToListAsync();
@@ -3213,19 +2847,28 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
             if (list.Count == 0) return 0;
 
             var existingLocals = await database.Table<GeoAgrLaborAuxiliarLocal>().ToListAsync();
-            var existingDict   = existingLocals.ToDictionary(l => (l.Compania!, l.IdEmpleado!, l.Fecha));
+            // La llave real es IdRegistro: un mismo empleado puede tener varias labores el mismo dia.
+            var porRegistro = existingLocals
+                .GroupBy(l => l.IdRegistro)
+                .ToDictionary(g => g.Key, g => g.First());
+            var porEmpleadoFecha = existingLocals
+                .GroupBy(l => (l.IdEmpleado!, l.Fecha))
+                .ToDictionary(g => g.Key, g => g.First());
 
             var toInsert = new List<GeoAgrLaborAuxiliarLocal>();
             var toUpdate = new List<GeoAgrLaborAuxiliarLocal>();
 
-            // Próximo IdRegistro disponible (MAX+1 o 1 si la tabla está vacía)
-            long nextId = existingLocals.Count > 0
-                ? existingLocals.Max(l => l.IdRegistro) + 1
-                : 1;
+            long nextId = await SiguienteIdRegistroAsync();
 
             foreach (var item in list)
             {
-                if (existingDict.TryGetValue((item.Compania, item.IdEmpleado, item.Fecha), out var local))
+                GeoAgrLaborAuxiliarLocal? local = null;
+                if (item.IdRegistro != 0)
+                    porRegistro.TryGetValue(item.IdRegistro, out local);
+                else
+                    porEmpleadoFecha.TryGetValue((item.IdEmpleado, item.Fecha), out local);
+
+                if (local is not null)
                 {
                     local.Comentarios = item.Comentarios;
                     toUpdate.Add(local);
@@ -3234,8 +2877,7 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
                 {
                     toInsert.Add(new GeoAgrLaborAuxiliarLocal
                     {
-                        IdRegistro  = nextId++,
-                        Compania    = item.Compania,
+                        IdRegistro  = item.IdRegistro != 0 ? item.IdRegistro : nextId++,
                         IdEmpleado  = item.IdEmpleado,
                         Fecha       = item.Fecha,
                         Comentarios = item.Comentarios,
@@ -3250,20 +2892,32 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
                     db.Execute(
                         @"UPDATE GeoAgrLaborAuxiliar
                           SET Comentarios=?
-                          WHERE IdRegistro=? AND Compania=? AND IdEmpleado=? AND Fecha=?",
-                        u.Comentarios, u.IdRegistro, u.Compania, u.IdEmpleado, u.Fecha);
+                          WHERE IdRegistro=?",
+                        u.Comentarios, u.IdRegistro);
                 if (toInsert.Count > 0)
                     totalAffected += db.InsertAll(toInsert);
             });
             return totalAffected;
         }
 
-        public async Task<int> SaveGeoAgrLaborAuxiliarEstadoAsync(long idRegistro, string compania)
+        /// <summary>
+        /// Siguiente IdRegistro libre: MAX(local, semilla de migracion) + 1. La semilla es el mayor
+        /// IdRegistro de la base anterior (incluidas las labores finalizadas que no se copiaron),
+        /// para no reutilizar ids que el servidor ya conoce.
+        /// </summary>
+        private async Task<long> SiguienteIdRegistroAsync()
+        {
+            long maxLocal = await database.ExecuteScalarAsync<long>("SELECT IFNULL(MAX(IdRegistro), 0) FROM GeoAgrLaborAuxiliar");
+            long semilla = await database.ExecuteScalarAsync<long>("SELECT IFNULL(MAX(MaxIdRegistro), 0) FROM MigracionLabores");
+            return Math.Max(maxLocal, semilla) + 1;
+        }
+
+        public async Task<int> SaveGeoAgrLaborAuxiliarEstadoAsync(long idRegistro)
         {
             // Marca el registro como "En Proceso de Autorización" (1), excepto los detalles ya
             // finalizados —2 (Aprobado) y 99 (Aplicado)—, que conservan su estado y no se reenvían.
-            await database.ExecuteAsync(@"UPDATE GeoAgrLaborAuxiliar SET EstadoId=? WHERE IdRegistro=? AND Compania=? AND EstadoId NOT IN (2, 99)", 1, idRegistro, compania);
-            await database.ExecuteAsync(@"UPDATE GeoAgrLaborAuxiliarDet SET EstadoId=? WHERE IdRegistro=? AND Compania=? AND EstadoId NOT IN (2, 99)", 1, idRegistro, compania);
+            await database.ExecuteAsync(@"UPDATE GeoAgrLaborAuxiliar SET EstadoId=? WHERE IdRegistro=? AND EstadoId NOT IN (2, 99)", 1, idRegistro);
+            await database.ExecuteAsync(@"UPDATE GeoAgrLaborAuxiliarDet SET EstadoId=? WHERE IdRegistro=? AND EstadoId NOT IN (2, 99)", 1, idRegistro);
             return 1;
         }
 
@@ -3273,16 +2927,16 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
             return true;
         }
 
-        public async Task<bool> DeleteGeoAgrLaborAuxiliarAsync(string compania, string idEmpleado, DateTime fecha)
+        public async Task<bool> DeleteGeoAgrLaborAuxiliarAsync(string idEmpleado, DateTime fecha)
         {
             await database.ExecuteAsync(
-                "DELETE FROM GeoAgrLaborAuxiliar WHERE Compania=? AND IdEmpleado=? AND Fecha=?",
-                compania, idEmpleado, fecha);
+                "DELETE FROM GeoAgrLaborAuxiliar WHERE IdEmpleado=? AND Fecha=?",
+                idEmpleado, fecha);
             return true;
         }
 
         // ════════════════════════════════════════════════════════════════════════
-        // TicoFrut — GeoAgrLaborAuxiliarDet
+        // GeoAgrLaborAuxiliarDet
         // ════════════════════════════════════════════════════════════════════════
 
         public async Task<List<GeoAgrLaborAuxiliarDet>> GetGeoAgrLaborAuxiliarDetAsync()
@@ -3291,19 +2945,18 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
             return locals.Select(MapDetLocalToDet).ToList();
         }
 
-        public async Task<List<GeoAgrLaborAuxiliarDet>> GetGeoAgrLaborAuxiliarDetAsync(string compania, string idEmpleado)
+        public async Task<List<GeoAgrLaborAuxiliarDet>> GetGeoAgrLaborAuxiliarDetAsync(string idEmpleado)
         {
             var locals = await database.Table<GeoAgrLaborAuxiliarDetLocal>()
-                .Where(l => l.Compania == compania && l.IdEmpleado == idEmpleado)
+                .Where(l => l.IdEmpleado == idEmpleado)
                 .ToListAsync();
             return locals.Select(MapDetLocalToDet).ToList();
         }
 
-        public async Task<List<GeoAgrLaborAuxiliarDet>> GetGeoAgrLaborAuxiliarDetAsync(string compania, string idEmpleado, DateTime fechaInicio, DateTime fechaFinal)
+        public async Task<List<GeoAgrLaborAuxiliarDet>> GetGeoAgrLaborAuxiliarDetAsync(string idEmpleado, DateTime fechaInicio, DateTime fechaFinal)
         {
             var locals = await database.Table<GeoAgrLaborAuxiliarDetLocal>()
-                .Where(l => l.Compania == compania 
-                        && l.IdEmpleado == idEmpleado 
+                .Where(l => l.IdEmpleado == idEmpleado
                         && l.Fecha >= fechaInicio
                         && l.Fecha <= fechaFinal
                         && (l.EstadoId != 99 && l.EstadoId != 100))
@@ -3311,19 +2964,18 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
             return locals.Select(MapDetLocalToDet).ToList();
         }
 
-        public async Task<List<GeoAgrLaborAuxiliarDet>> GetGeoAgrLaborAuxiliarDetAsync(string compania, string idEmpleado, DateTime fecha, long IdRegistro)
+        public async Task<List<GeoAgrLaborAuxiliarDet>> GetGeoAgrLaborAuxiliarDetAsync(string idEmpleado, DateTime fecha, long idRegistro)
         {
             var locals = await database.Table<GeoAgrLaborAuxiliarDetLocal>()
-                .Where(l => l.Compania == compania && l.IdEmpleado == idEmpleado && l.Fecha == fecha && l.IdRegistro == IdRegistro)
+                .Where(l => l.IdEmpleado == idEmpleado && l.Fecha == fecha && l.IdRegistro == idRegistro)
                 .ToListAsync();
             return locals.Select(MapDetLocalToDet).ToList();
         }
 
-        public async Task<GeoAgrLaborAuxiliarDet?> GetGeoAgrLaborAuxiliarDetAsync(string compania, string idEmpleado, DateTime fecha, int item)
+        public async Task<GeoAgrLaborAuxiliarDet?> GetGeoAgrLaborAuxiliarDetPorItemAsync(string idEmpleado, DateTime fecha, int item)
         {
             var l = await database.Table<GeoAgrLaborAuxiliarDetLocal>()
-                .FirstOrDefaultAsync(i => i.Compania == compania && i.IdEmpleado == idEmpleado
-                                       && i.Fecha == fecha && i.Item == item);
+                .FirstOrDefaultAsync(i => i.IdEmpleado == idEmpleado && i.Fecha == fecha && i.Item == item);
             if (l is null) return null;
             return MapDetLocalToDet(l);
         }
@@ -3334,38 +2986,44 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
             if (list.Count == 0) return 0;
 
             var existingLocals = await database.Table<GeoAgrLaborAuxiliarDetLocal>().ToListAsync();
-            var existingDict   = existingLocals.ToDictionary(l => (l.Compania!, l.IdEmpleado!, l.Fecha, l.Item, l.IdEmpleadoAsignado!));
+            // Llave real: (IdRegistro, Item, IdEmpleadoAsignado); IdEmpleado y Fecha salen del encabezado.
+            var existingDict = existingLocals
+                .GroupBy(l => (l.IdRegistro, l.Item, l.IdEmpleadoAsignado ?? ""))
+                .ToDictionary(g => g.Key, g => g.First());
 
             var toInsert = new List<GeoAgrLaborAuxiliarDetLocal>();
             var toUpdate = new List<GeoAgrLaborAuxiliarDetLocal>();
 
-            // Cache de IdRegistro del encabezado padre para evitar múltiples consultas
-            var idRegistroCache = new Dictionary<(string, string, DateTime), long>();
+            // Cache de IdRegistro del encabezado padre para detalles que llegan sin IdRegistro
+            var idRegistroCache = new Dictionary<(string, DateTime), long>();
 
             foreach (var item in list)
             {
                 var idEmpAsig = item.IdEmpleadoAsignado ?? item.IdEmpleado;
 
-                // Resolver IdRegistro del encabezado padre
-                var cacheKey = (item.Compania, item.IdEmpleado, item.Fecha);
-                if (!idRegistroCache.TryGetValue(cacheKey, out long idRegistro))
+                long idRegistro = item.IdRegistro;
+                if (idRegistro == 0)
                 {
-                    var padre = await database.Table<GeoAgrLaborAuxiliarLocal>()
-                        .FirstOrDefaultAsync(l => l.Compania   == item.Compania
-                                               && l.IdEmpleado == item.IdEmpleado
-                                               && l.Fecha      == item.Fecha);
-                    idRegistro = padre?.IdRegistro ?? 0;
-                    idRegistroCache[cacheKey] = idRegistro;
+                    var cacheKey = (item.IdEmpleado, item.Fecha);
+                    if (!idRegistroCache.TryGetValue(cacheKey, out idRegistro))
+                    {
+                        var padre = await database.Table<GeoAgrLaborAuxiliarLocal>()
+                            .Where(l => l.IdEmpleado == item.IdEmpleado && l.Fecha == item.Fecha)
+                            .OrderByDescending(l => l.IdRegistro)
+                            .FirstOrDefaultAsync();
+                        idRegistro = padre?.IdRegistro ?? 0;
+                        idRegistroCache[cacheKey] = idRegistro;
+                    }
                 }
 
-                if (existingDict.TryGetValue((item.Compania, item.IdEmpleado, item.Fecha, item.Item, idEmpAsig), out var local))
+                if (existingDict.TryGetValue((idRegistro, item.Item, idEmpAsig), out var local))
                 {
-                    local.IdRegistro          = idRegistro;
                     local.Bloque              = item.Bloque;
                     local.Finca               = item.Finca;
                     local.Lote                = item.Lote;
                     local.Ot                  = item.Ot;
                     local.Labor               = item.Labor;
+                    local.Recurso             = item.Recurso;
                     local.CantidadRendimiento = item.CantidadRendimiento;
                     local.Unidad              = item.Unidad;
                     local.HorasAprobadas      = item.HorasAprobadas;
@@ -3377,7 +3035,6 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
                     toInsert.Add(new GeoAgrLaborAuxiliarDetLocal
                     {
                         IdRegistro           = idRegistro,
-                        Compania             = item.Compania,
                         IdEmpleado           = item.IdEmpleado,
                         Fecha                = item.Fecha,
                         Item                 = item.Item,
@@ -3386,6 +3043,7 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
                         Lote                 = item.Lote,
                         Ot                   = item.Ot,
                         Labor                = item.Labor,
+                        Recurso              = item.Recurso,
                         CantidadRendimiento  = item.CantidadRendimiento,
                         Unidad               = item.Unidad,
                         HorasAprobadas       = item.HorasAprobadas,
@@ -3401,12 +3059,12 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
                 foreach (var u in toUpdate)
                     db.Execute(
                         @"UPDATE GeoAgrLaborAuxiliarDet
-                          SET IdRegistro=?, Bloque=?, Finca=?, Lote=?, Ot=?, Labor=?,
+                          SET Bloque=?, Finca=?, Lote=?, Ot=?, Labor=?, Recurso=?,
                               CantidadRendimiento=?, Unidad=?, HorasAprobadas=?, EstadoId=?
-                          WHERE Compania=? AND IdEmpleado=? AND Fecha=? AND Item=? AND IdEmpleadoAsignado=?",
-                        u.IdRegistro, u.Bloque, u.Finca, u.Lote, u.Ot, u.Labor,
+                          WHERE IdRegistro=? AND Item=? AND IdEmpleadoAsignado=?",
+                        u.Bloque, u.Finca, u.Lote, u.Ot, u.Labor, u.Recurso,
                         u.CantidadRendimiento, u.Unidad, u.HorasAprobadas, u.EstadoId,
-                        u.Compania, u.IdEmpleado, u.Fecha, u.Item, u.IdEmpleadoAsignado);
+                        u.IdRegistro, u.Item, u.IdEmpleadoAsignado);
                 if (toInsert.Count > 0)
                     totalAffected += db.InsertAll(toInsert);
             });
@@ -3419,18 +3077,17 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
             return true;
         }
 
-        public async Task<bool> DeleteGeoAgrLaborAuxiliarDetAsync(string compania, string idEmpleado, DateTime fecha)
+        public async Task<bool> DeleteGeoAgrLaborAuxiliarDetAsync(string idEmpleado, DateTime fecha)
         {
             await database.ExecuteAsync(
-                "DELETE FROM GeoAgrLaborAuxiliarDet WHERE Compania=? AND IdEmpleado=? AND Fecha=?",
-                compania, idEmpleado, fecha);
+                "DELETE FROM GeoAgrLaborAuxiliarDet WHERE IdEmpleado=? AND Fecha=?",
+                idEmpleado, fecha);
             return true;
         }
 
         private static GeoAgrLaborAuxiliarDet MapDetLocalToDet(GeoAgrLaborAuxiliarDetLocal l) =>
             new GeoAgrLaborAuxiliarDet
             {
-                Compania            = l.Compania!,
                 IdEmpleado          = l.IdEmpleado!,
                 Fecha               = l.Fecha,
                 Item                = l.Item,
@@ -3449,43 +3106,7 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
             };
 
         // ════════════════════════════════════════════════════════════════════════
-        // FiltroUsuario — último País y Compañía seleccionados por empleado
-        // ════════════════════════════════════════════════════════════════════════
-
-        /// <summary>
-        /// Devuelve el filtro guardado del usuario, o null si nunca ha seleccionado.
-        /// </summary>
-        public async Task<FiltroUsuarioLocal?> GetFiltroUsuarioAsync(string idUsuario)
-        {
-            return await database.Table<FiltroUsuarioLocal>()
-                                 .FirstOrDefaultAsync(f => f.IdUsuario == idUsuario);
-        }
-
-        /// <summary>
-        /// Inserta o actualiza el filtro del usuario (upsert por IdUsuario).
-        /// </summary>
-        public async Task SaveFiltroUsuarioAsync(string idUsuario, string pais, string compania)
-        {
-            var existing = await GetFiltroUsuarioAsync(idUsuario);
-            if (existing is null)
-            {
-                await database.InsertAsync(new FiltroUsuarioLocal
-                {
-                    IdUsuario = idUsuario,
-                    Pais      = pais,
-                    Compania  = compania
-                });
-            }
-            else
-            {
-                existing.Pais     = pais;
-                existing.Compania = compania;
-                await database.UpdateAsync(existing);
-            }
-        }
-
-        // ════════════════════════════════════════════════════════════════════════
-        // TicoFrut — GeoAgrLaborAuxiliar  (métodos por IdRegistro)
+        // GeoAgrLaborAuxiliar  (métodos por IdRegistro)
         // ════════════════════════════════════════════════════════════════════════
 
         /// <summary>Devuelve la lista raw (con IdRegistro) de todas las labores auxiliares.</summary>
@@ -3499,15 +3120,11 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
         /// </summary>
         public async Task<long> InsertGeoAgrLaborAuxiliarAsync(GeoAgrLaborAuxiliar labor)
         {
-            var existingLocals = await database.Table<GeoAgrLaborAuxiliarLocal>().ToListAsync();
-            long nextId = existingLocals.Count > 0
-                ? existingLocals.Max(l => l.IdRegistro) + 1
-                : 1;
+            long nextId = await SiguienteIdRegistroAsync();
 
             var local = new GeoAgrLaborAuxiliarLocal
             {
                 IdRegistro  = nextId,
-                Compania    = labor.Compania,
                 IdEmpleado  = labor.IdEmpleado,
                 Fecha       = labor.Fecha,
                 Comentarios = labor.Comentarios,
@@ -3557,7 +3174,6 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
             var toInsert = list.Select(item => new GeoAgrLaborAuxiliarDetLocal
             {
                 IdRegistro          = idRegistro,
-                Compania            = item.Compania,
                 IdEmpleado          = item.IdEmpleado,
                 Fecha               = item.Fecha,
                 Item                = item.Item,

@@ -156,9 +156,6 @@
       <Reference Include="JtSegEncrypta">
         <HintPath>D:\Source\Librerias\JtSegEncrypta\JtSegEncrypta\bin\Release\net7.0\JtSegEncrypta.dll</HintPath>
       </Reference>
-      <Reference Include="TicoFrutLibs">
-        <HintPath>Dll\TicoFrutLibs.dll</HintPath>
-      </Reference>
     </ItemGroup>
 
 </Project>

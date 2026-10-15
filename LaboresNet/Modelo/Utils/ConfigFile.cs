@@ -46,12 +46,6 @@ namespace PortalEmpleadoGeotime.Client.Modelo.Utils
                                 case "ApiGeotimeSchema":
                                     parametros.ApiGeotimeSchema = reader.ReadString();
                                     break;
-                                case "ApiAuxiliarUrl":
-                                    parametros.ApiAuxiliarUrl = reader.ReadString();
-                                    break;
-                                case "ApiAuxiliarSchema":
-                                    parametros.ApiAuxiliarSchema = reader.ReadString();
-                                    break;
                                 case "ApiClientId":
                                     parametros.ApiClientId = reader.ReadString();
                                     break;

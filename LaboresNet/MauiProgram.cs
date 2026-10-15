@@ -1,7 +1,6 @@
 ﻿using CurrieTechnologies.Razor.SweetAlert2;
 using JtSegEncrypta;
 using LaboresNet.Data;
-using LaboresNet.Data.Interfaces;
 using LaboresNet.Data.Navigation;
 using Microsoft.Extensions.Logging;
 using PortalEmpleadoGeotime.Client.Data;
@@ -32,7 +31,6 @@ namespace LaboresNet
                 .AddScoped<IBrowserService, BrowserService>()
                 .AddScoped<IGridExtensions, PortalEmpleadoGeotime.Client.Data.GridExtensions>()
                 .AddScoped<IEncriptaService, EncriptaService>()
-                .AddScoped<ITicoFrutConnect, TicoFrutConnect>()
                 .AddScoped<LoginState>()
                 .AddScoped<PeriodicExecutor>();
 

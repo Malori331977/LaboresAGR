@@ -223,12 +223,11 @@
 
                 foreach (var r in filtrados)
                 {
-                    var detalles = await marcaDBLocal.GetGeoAgrLaborAuxiliarDetAsync(r.Compania!, r.IdEmpleado!, r.Fecha, r.IdRegistro);
+                    var detalles = await marcaDBLocal.GetGeoAgrLaborAuxiliarDetAsync(r.IdEmpleado!, r.Fecha, r.IdRegistro);
 
                     items.Add(new GeoAgrLaborAuxiliarExt
                     {
                         IdRegistro   = r.IdRegistro,
-                        Compania     = r.Compania,
                         IdEmpleado   = r.IdEmpleado,
                         Fecha        = r.Fecha,
                         Comentarios  = r.Comentarios,
@@ -260,19 +259,14 @@
             var fechaDesde = parametros.FechaDesde.ToDateTime(TimeOnly.MinValue);
             var fechaHasta = parametros.FechaHasta.ToDateTime(TimeOnly.MaxValue);
 
-            var solicitudAuxLaborTask = geoConnect.GetSolicitudAuxLaborByResponsable(
-                loginState.CompaniaSeleccionada,
+            var solicitudAuxLaborTask = geoConnect.GetSolicitudAuxLaborByResponsable(loginState.CompaniaTenant,
                 loginState.Empleado.IdNumero!,
                 fechaDesde.ToString("yyyyMMdd"),
                 fechaHasta.ToString("yyyyMMdd"));
-            var laboresAuxiliaresTask = marcaDBLocal.GetGeoAgrLaborAuxiliarAsync(
-                loginState.CompaniaSeleccionada,
-                loginState.Empleado.IdNumero!,
+            var laboresAuxiliaresTask = marcaDBLocal.GetGeoAgrLaborAuxiliarAsync(loginState.Empleado.IdNumero!,
                 fechaDesde,
                 fechaHasta);
-            var itemsLaborAuxiliarTask = marcaDBLocal.GetGeoAgrLaborAuxiliarDetAsync(
-                loginState.CompaniaSeleccionada,
-                loginState.Empleado.IdNumero!,
+            var itemsLaborAuxiliarTask = marcaDBLocal.GetGeoAgrLaborAuxiliarDetAsync(loginState.Empleado.IdNumero!,
                 fechaDesde,
                 fechaHasta);
 
@@ -327,7 +321,7 @@
     private void OnClickEdit(GeoAgrLaborAuxiliarExt labor)
     {
         var fecha = labor.Fecha.ToString("yyyyMMdd");
-        NavigationManager.NavigateTo($"./geoagrlaborauxiliaredicion?compania={Uri.EscapeDataString(labor.Compania ?? "")}&idEmpleado={Uri.EscapeDataString(labor.IdEmpleado ?? "")}&fecha={fecha}&idregistro={labor.IdRegistro}");
+        NavigationManager.NavigateTo($"./geoagrlaborauxiliaredicion?idEmpleado={Uri.EscapeDataString(labor.IdEmpleado ?? "")}&fecha={fecha}&idregistro={labor.IdRegistro}");
     }
 
     private async Task OnDelete(GeoAgrLaborAuxiliarExt labor)

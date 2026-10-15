@@ -68,11 +68,7 @@
         }
         else
         {
-            // ── Sincronización TicoFrut ──────────────────────────────────────
-            if (await ticoFrutConnect.ApiDisponible())
-            {
-                await SincronizarBases();
-            }     
+            await SincronizarBases();
             PeriodicExecutor.StartExecuting();
         }
         
@@ -114,22 +110,17 @@
             var distribucionPendienteTask = marcaDBLocal.GetMarcaDistribucionPendienteAsync();
             var templatesFACESTask = geoConnect.GetTemplateFACE();            
             
-            var solicitudAuxLaborTask = geoConnect.GetSolicitudAuxLaborByResponsable(loginState.CompaniaSeleccionada, loginState.Empleado.IdNumero!, DateTime.Now.AddDays(-35).ToString("yyyyMMdd"), DateTime.Now.AddDays(1).ToString("yyyyMMdd"));
-            var laborAuxiliarTask = marcaDBLocal.GetGeoAgrLaborAuxiliarAsync(loginState.CompaniaSeleccionada, loginState.Empleado.IdNumero!, DateTime.Now.AddDays(-35), DateTime.Now.AddDays(1));
-            var itemsLaborAuxiliarTask = marcaDBLocal.GetGeoAgrLaborAuxiliarDetAsync(loginState.CompaniaSeleccionada, loginState.Empleado.IdNumero!, DateTime.Now.AddDays(-35), DateTime.Now.AddDays(1));
+            var solicitudAuxLaborTask = geoConnect.GetSolicitudAuxLaborByResponsable(loginState.CompaniaTenant, loginState.Empleado.IdNumero!, DateTime.Now.AddDays(-35).ToString("yyyyMMdd"), DateTime.Now.AddDays(1).ToString("yyyyMMdd"));
+            var laborAuxiliarTask = marcaDBLocal.GetGeoAgrLaborAuxiliarAsync(loginState.Empleado.IdNumero!, DateTime.Now.AddDays(-35), DateTime.Now.AddDays(1));
+            var itemsLaborAuxiliarTask = marcaDBLocal.GetGeoAgrLaborAuxiliarDetAsync(loginState.Empleado.IdNumero!, DateTime.Now.AddDays(-35), DateTime.Now.AddDays(1));
             
             
-            var fincasTask = ticoFrutConnect.GetGeoAgrFinca();
-            var lotesTask = ticoFrutConnect.GetGeoAgrLote();
-            var otsTask = ticoFrutConnect.GetGeoAgrOt();
-            var otLaboresTask = ticoFrutConnect.GetGeoAgrOtLabor();
-            var recursosTask = ticoFrutConnect.GetGeoAgrRecursoConcepto();
 
             await Task.WhenAll(empleadosTask, marcasTask, phPlanillasTask, phPeriodosTask,
                                marcasPendientesTask, ccostosTask, proyectosTask, faseproyectosTask,
                                phUsuarioTask, phLoginTask, distribucionPendienteTask, templatesFACESTask,
-                               fincasTask, lotesTask, otsTask, laborAuxiliarTask, itemsLaborAuxiliarTask, solicitudAuxLaborTask,
-                               otLaboresTask, recursosTask, laborAuxiliarTask, estadosTask);
+                               laborAuxiliarTask, itemsLaborAuxiliarTask, solicitudAuxLaborTask,
+                               laborAuxiliarTask, estadosTask);
 
             var empleados = await empleadosTask;
             var marcas = await marcasTask;
@@ -145,11 +136,6 @@
             var templatesFACES = await templatesFACESTask;
             var estados = await estadosTask;
 
-            var fincas = await fincasTask;
-            var lotes = await lotesTask;
-            var ots = await otsTask;
-            var otLabores = await otLaboresTask;
-            var recursos = await recursosTask;
             var laborAuxiliar = await laborAuxiliarTask;
             var solicitudAuxLabor = await solicitudAuxLaborTask;
             var itemsLaborAuxiliar = await itemsLaborAuxiliarTask;
@@ -192,11 +178,11 @@
                 await marcaDBLocal.SaveMarcaInAsync(listMarcas);
             await marcaDBLocal.SaveTemplateFACEAsync(templatesFACES);
 
-            await marcaDBLocal.SaveGeoAgrFincaAsync(fincas);
-            await marcaDBLocal.SaveGeoAgrLoteAsync(lotes);
-            await marcaDBLocal.SaveGeoAgrOtAsync(ots);
-            await marcaDBLocal.SaveGeoAgrOtLaborAsync(otLabores);
-            await marcaDBLocal.SaveGeoAgrRecursoConceptoAsync(recursos);
+            // Catálogos de labores desde Geotime (todo o nada)
+            if (!await PortalEmpleadoGeotime.Client.Data.LaboresCatalogoSync.SincronizarAsync(geoConnect, marcaDBLocal))
+            {
+                await swal.FireAsync("Atención", "No se pudieron actualizar los catálogos de labores. Se mantienen los datos locales.", SweetAlertIcon.Warning);
+            }
             await marcaDBLocal.SaveGeoAgrLaborAuxiliarAsync(laborAuxiliar);
 
             if (solicitudAuxLabor is not null)
@@ -243,6 +229,11 @@
 
             // ── Enviar labores pendientes (EstadoId = 0) que no pudieron enviarse por falta de conexión ──
             var laboresPendientes = laboresAuxiliares?.Where(l => l.EstadoId == 0).ToList();
+            if (string.IsNullOrEmpty(loginState.CompaniaTenant) && laboresPendientes?.Count > 0)
+            {
+                await swal.FireAsync("Atención", "No se pudo determinar la compañía de la sesión; las labores pendientes no se enviaron.", SweetAlertIcon.Warning);
+                laboresPendientes = null;
+            }
             if (laboresPendientes is not null && laboresPendientes.Count > 0)
             {
                 foreach (var labor in laboresPendientes)
@@ -263,7 +254,7 @@
                         RECURSO = d.Recurso!,
                         CANTIDAD_RENDIMIENTO = (decimal)d.CantidadRendimiento!,
                         UNIDAD = d.Unidad!,
-                        COMPANIA = labor.Compania!,
+                        COMPANIA = loginState.CompaniaTenant,
                         FECHA = labor.Fecha,
                         HORAS_APROBADAS = 0M,
                         ESTADOID = 1,
@@ -272,7 +263,7 @@
                     var laborGT = new cSolicitudAuxLabor
                     {
                         ID = 0,
-                        COMPANIA = labor.Compania!,
+                        COMPANIA = loginState.CompaniaTenant,
                         IDRESPONSABLE = labor.IdEmpleado!,
                         FECHA = labor.Fecha,
                         COMENTARIOS = labor.Comentarios,
@@ -287,7 +278,7 @@
 
                     var responseLabor = await geoConnect.Post("SolicitudAuxLabor", new List<cSolicitudAuxLabor>() { laborGT });
                     if (responseLabor.Id == "0")
-                        await marcaDBLocal.SaveGeoAgrLaborAuxiliarEstadoAsync(labor.IdRegistro, labor.Compania!);
+                        await marcaDBLocal.SaveGeoAgrLaborAuxiliarEstadoAsync(labor.IdRegistro);
                 }
             }
 

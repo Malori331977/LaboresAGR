@@ -90,6 +90,7 @@
             var companiaSeleccionada = companias.FirstOrDefault(e => e.IDCOMP == idcomp);
 
             geoConnect.setSchema(companiaSeleccionada!);
+            loginState.SetCompaniaTenant(companiaSeleccionada!.IDCOMP);
             loginState.SetMarcador(true);
             loginState.SetTimeZone(companiaSeleccionada!.ZONAHORARIA);
             Thread.Sleep(1000);

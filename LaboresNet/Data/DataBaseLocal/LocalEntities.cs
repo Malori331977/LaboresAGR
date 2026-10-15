@@ -325,73 +325,78 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
         public string ApiClientId { get; set; } = "";
         public string ApiUser { get; set; } = "";
         public string ApiPassword { get; set; } = "";
-        public string ApiAuxiliarUrl { get; set; } = "";
-        public string ApiAuxiliarSchema { get; set; } = "";
     }
 
-    // ─── TicoFrut local entities ────────────────────────────────────────────────
+    // ─── Catálogos de labores (Ph_Labores*) ─────────────────────────────────────
     // Las PKs son compuestas; las tablas se crean con SQL raw en MarcasDBLocal.
 
-    [Table("GeoAgrFinca")]
-    public class GeoAgrFincaLocal
+    [Table("LaboresBloque")]
+    public class LaboresBloqueLocal
     {
-        public string? Compania  { get; set; }
-        public string? Pais      { get; set; }
-        public string? Bloque    { get; set; }
-        public string? Finca     { get; set; }
+        public string Id { get; set; } = "";
+        public string? Descripcion { get; set; }
     }
 
-    [Table("GeoAgrLote")]
-    public class GeoAgrLoteLocal
+    [Table("LaboresFinca")]
+    public class LaboresFincaLocal
     {
-        public string? Compania  { get; set; }
-        public string? Bloque    { get; set; }
-        public string? Finca     { get; set; }
-        public string? Lote      { get; set; }
-        public string? Pais      { get; set; }
-        public string? TipoSuelo { get; set; }
-        public string? Variedad  { get; set; }
+        public string BloqueId { get; set; } = "";
+        public string Id { get; set; } = "";
+        public string? Descripcion { get; set; }
     }
 
-    [Table("GeoAgrOt")]
-    public class GeoAgrOtLocal
+    [Table("LaboresLote")]
+    public class LaboresLoteLocal
     {
-        public string? Compania { get; set; }
-        public string? Bloque   { get; set; }
-        public string? Finca    { get; set; }
-        public string? Ot       { get; set; }
-        public string? NombreOt { get; set; }
+        public string BloqueId { get; set; } = "";
+        public string FincaId { get; set; } = "";
+        public string Id { get; set; } = "";
+        public string? Descripcion { get; set; }
     }
 
-    [Table("GeoAgrOtLabor")]
-    public class GeoAgrOtLaborLocal
+    [Table("LaboresOrdenTrabajo")]
+    public class LaboresOrdenTrabajoLocal
     {
-        public string? Compania    { get; set; }
-        public string? Bloque      { get; set; }
-        public string? Finca       { get; set; }
-        public string? Ot          { get; set; }
-        public string? Labor       { get; set; }
-        public string? NombreLabor { get; set; }
+        public string BloqueId { get; set; } = "";
+        public string FincaId { get; set; } = "";
+        public string Id { get; set; } = "";
+        public string? Descripcion { get; set; }
     }
 
-    [Table("GeoAgrRecursoConcepto")]
-    public class GeoAgrRecursoConceptoLocal
+    [Table("LaboresActividad")]
+    public class LaboresActividadLocal
     {
-        public string?  Compania    { get; set; }
-        public string?  Recurso     { get; set; }
-        public string?  Descripcion { get; set; }
-        public string?  TipoFactorMo { get; set; }
-        public decimal? FactorMo    { get; set; }
-        public string?  ConceptoMo  { get; set; }
-        public string? Unidad { get; set; }
+        public string BloqueId { get; set; } = "";
+        public string FincaId { get; set; } = "";
+        public string OrdenTrabajoId { get; set; } = "";
+        public string Id { get; set; } = "";
+        public string? Descripcion { get; set; }
     }
+
+    [Table("LaboresUnidad")]
+    public class LaboresUnidadLocal
+    {
+        public string Id { get; set; } = "";
+        public string? Descripcion { get; set; }
+    }
+
+    [Table("LaboresRecurso")]
+    public class LaboresRecursoLocal
+    {
+        public string Id { get; set; } = "";
+        public string? Descripcion { get; set; }
+        public int IdConcepto { get; set; }
+        public string UnidadId { get; set; } = "";
+    }
+
+    // Entidades locales de labor auxiliar
+    // Las PKs son compuestas; las tablas se crean con SQL raw en MarcasDBLocal.
 
     [Table("GeoAgrLaborAuxiliar")]
     public class GeoAgrLaborAuxiliarLocal
     {
         /// <summary>Identificador único de registro (parte de la PK compuesta).</summary>
         public long      IdRegistro  { get; set; }
-        public string?   Compania    { get; set; }
         public string?   IdEmpleado  { get; set; }
         public DateTime  Fecha       { get; set; }
         public string?   Comentarios { get; set; }
@@ -403,7 +408,6 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
     {
         /// <summary>FK → GeoAgrLaborAuxiliar.IdRegistro; parte de la PK compuesta.</summary>
         public long      IdRegistro           { get; set; }
-        public string?   Compania             { get; set; }
         public string?   IdEmpleado           { get; set; }
         public DateTime  Fecha                { get; set; }
         public int       Item                 { get; set; }
@@ -419,16 +423,6 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
         public int EstadoId { get; set; } = 0;
         /// <summary>Empleado al que se asignó este ítem; parte de la PK compuesta.</summary>
         public string?   IdEmpleadoAsignado   { get; set; }
-    }
-
-    [Table("FiltroUsuario")]
-    public class FiltroUsuarioLocal
-    {
-        /// <summary>IdNumero del empleado autenticado.</summary>
-        [PrimaryKey]
-        public string IdUsuario  { get; set; } = "";
-        public string Pais       { get; set; } = "";
-        public string Compania   { get; set; } = "";
     }
 
     [Table("cEstado")]
