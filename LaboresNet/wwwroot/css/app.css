@@ -945,3 +945,97 @@ canvas {
 @keyframes api-pulse {
     50% { opacity: 0.35; }
 }
+
+/* ── Botones de acción en cabeceras con fondo de marca ─────────────────── */
+.hdr-acciones {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-right: 10px;
+    vertical-align: middle;
+}
+
+.hdr-titulo { vertical-align: middle; }
+
+.btn-hdr {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-width: 38px;
+    min-height: 38px;
+    padding: 0 14px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    background: rgba(255, 255, 255, 0.18);
+    color: #fff;
+    font-size: 0.82rem;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+    box-shadow: 0 1px 3px rgba(5, 39, 103, 0.25);
+    transition: background-color .15s ease, box-shadow .15s ease, transform .1s ease;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.btn-hdr .rzi { font-size: 1.25rem; }
+
+.btn-hdr:hover:not([disabled]) {
+    background: rgba(255, 255, 255, 0.32);
+    box-shadow: 0 3px 8px rgba(5, 39, 103, 0.3);
+}
+
+.btn-hdr:active:not([disabled]) { transform: scale(0.94); }
+
+.btn-hdr:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+
+.btn-hdr[disabled] { opacity: 0.7; cursor: progress; }
+
+.btn-hdr-icon { padding: 0; width: 38px; }
+
+.btn-hdr-primary {
+    background: #fff;
+    border-color: #fff;
+    color: #1a76cb;
+}
+
+.btn-hdr-primary:hover:not([disabled]) { background: #f1f8ff; }
+
+.rz-panel.panel-brand .rz-panel-titlebar .btn-hdr-primary .rzi { color: #1a76cb; }
+
+.btn-hdr.girando .rzi { animation: btn-hdr-giro 0.9s linear infinite; }
+
+@keyframes btn-hdr-giro { to { transform: rotate(360deg); } }
+
+/* ── Botón volver (PageReturn) ─────────────────────────────────────────── */
+.btn-back {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 42px;
+    height: 42px;
+    padding: 0;
+    border-radius: 50%;
+    border: 1px solid #cfe6f7;
+    background: #EBF5FC;
+    color: #1a76cb;
+    box-shadow: 0 2px 6px rgba(26, 118, 203, 0.18);
+    cursor: pointer;
+    transition: background .15s ease, color .15s ease, box-shadow .15s ease, transform .1s ease;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.btn-back .rzi { font-size: 1.4rem; color: inherit; }
+
+.btn-back:hover {
+    background: linear-gradient(135deg, #1a76cb 0%, #1AA5EA 100%);
+    border-color: transparent;
+    color: #fff;
+    box-shadow: 0 4px 10px rgba(26, 118, 203, 0.35);
+}
+
+.btn-back:active { transform: scale(0.92); }
+
+.btn-back:focus-visible { outline: 2px solid #1a76cb; outline-offset: 2px; }

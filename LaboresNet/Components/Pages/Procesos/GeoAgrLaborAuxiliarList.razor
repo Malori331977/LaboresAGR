@@ -42,13 +42,21 @@
 
             <RadzenPanel AllowCollapse="true" class="panel-brand" Style="margin-bottom:0.5rem;">
                 <HeaderTemplate>
-                    <button class="btn btn-sm btn-success rounded-circle" @onclick="async () => await OnClickAdd()">
-                        <RadzenIcon Icon="agriculture" class="me-1" />
-                    </button>
-                    <button class="btn btn-sm btn-primary rounded-circle ms-1" @onclick="async () => await SincronizarDetalles()" title="Sincronizar estados y cantidades">
-                        <RadzenIcon Icon="sync" />
-                    </button>
-                    Labores Auxiliares
+                    <span class="hdr-acciones">
+                        <button type="button" class="btn-hdr btn-hdr-primary"
+                                title="Registrar una nueva labor" aria-label="Nueva labor"
+                                @onclick="OnClickAdd" @onclick:stopPropagation="true">
+                            <RadzenIcon Icon="add_circle" />
+                            <span>Nueva</span>
+                        </button>
+                        <button type="button" class="btn-hdr btn-hdr-icon @(sincronizando ? "girando" : "")"
+                                title="Sincronizar estados y cantidades" aria-label="Sincronizar"
+                                disabled="@sincronizando"
+                                @onclick="OnClickSincronizar" @onclick:stopPropagation="true">
+                            <RadzenIcon Icon="sync" />
+                        </button>
+                    </span>
+                    <span class="hdr-titulo">Labores Auxiliares</span>
                 </HeaderTemplate>
                 <ChildContent>
                     <RadzenDataGrid @ref="grid" Render="@OnRender" class="rz-border-radius-2"
@@ -311,6 +319,25 @@
      
         }
         
+    }
+
+    private bool sincronizando;
+
+    private async Task OnClickSincronizar()
+    {
+        if (sincronizando) return;
+
+        sincronizando = true;
+        StateHasChanged();
+        try
+        {
+            await SincronizarDetalles();
+        }
+        finally
+        {
+            sincronizando = false;
+            StateHasChanged();
+        }
     }
 
     private async Task OnClickAdd()
