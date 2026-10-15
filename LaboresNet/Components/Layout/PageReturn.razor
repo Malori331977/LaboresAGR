@@ -5,7 +5,7 @@
         <div class="col-1 text-start">
             @if (!isAndroidOriOS)
             {
-                <button class="btn btn-sm btn-secondary rounded-circle" @onclick="async () => await OnClickRetorno()">
+                <button type="button" class="btn-back" title="Volver" aria-label="Volver" @onclick="async () => await OnClickRetorno()">
                     <RadzenIcon Icon="arrow_back" />
                 </button>
             }

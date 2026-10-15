@@ -33,6 +33,7 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
                 database.CreateTableAsync<cPh_PlanillaLocal>().Wait();
                 database.CreateTableAsync<cPh_CompaniaLocal>().Wait();
                 database.CreateTableAsync<cPortal_ConfigLocal>().Wait();
+                database.CreateTableAsync<cPh_OpcionesLocal>().Wait();
                 database.CreateTableAsync<NavItemLocal>().Wait();
                 database.CreateTableAsync<cPh_UsuarioLocal>().Wait();
                 database.CreateTableAsync<cParametroApiLocal>().Wait();
@@ -1124,7 +1125,7 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
 
         public async Task<IEnumerable<cMarcaIn>> GetMarcaIn(DateTime fecha)
         {
-            var l = await database.Table<cMarcaInLocal>().Where(i => ((DateTime)i.fecha!).ToString("yyyyMMdd") == fecha.ToString("yyyyMMdd")).ToListAsync();
+            var l = await database.Table<cMarcaInLocal>().Where(i => ((DateTime)i.fecha!).ToString("yyyyMMdd") == fecha.ToString("yyyyMMdd") && i.estado != "R").ToListAsync();
             if (l is null) return null;
             return l.Select(l => new cMarcaIn
             {
@@ -1144,6 +1145,28 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
                 host = string.IsNullOrEmpty(l.host) ? null : l.host,
                 dir_ip = string.IsNullOrEmpty(l.dir_ip) ? null : l.dir_ip
             }).ToList();
+        }
+
+        /// <summary>
+        /// Marcas guardadas localmente en la fecha indicada (cualquier estado), filtradas en memoria
+        /// porque sqlite-net no traduce ToString(formato) sobre fechas.
+        /// </summary>
+        public async Task<List<cMarcaIn>> GetMarcaInDelDiaAsync(DateTime fecha)
+        {
+            var locals = await database.Table<cMarcaInLocal>().ToListAsync();
+            return locals
+                .Where(l => l.fecha.HasValue && l.fecha.Value.Date == fecha.Date && l.estado != "R")
+                .Select(l => new cMarcaIn
+                {
+                    fecha = l.fecha,
+                    hora = string.IsNullOrEmpty(l.hora) ? null : l.hora,
+                    tipo = l.tipo,
+                    idnumero = string.IsNullOrEmpty(l.idnumero) ? null : l.idnumero,
+                    idplanilla = string.IsNullOrEmpty(l.idplanilla) ? null : l.idplanilla,
+                    idterminal = string.IsNullOrEmpty(l.idterminal) ? null : l.idterminal,
+                    estado = string.IsNullOrEmpty(l.estado) ? null : l.estado[0],
+                    fecha_reg = l.fecha_reg,
+                }).ToList();
         }
 
         /// <summary>
@@ -1167,7 +1190,10 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
 
         public async Task<List<cMarcaIn>> GetMarcaPendiente()
         {
-            var locals = await database.Table<cMarcaInLocal>().Where(i => i.estado == "N").ToListAsync();
+            // Las grupales se envian por /MarcaGrupal. El filtro es en memoria: las filas anteriores a la
+            // columna ES_GRUPAL la tienen en NULL y en SQL "not (NULL = 1)" las descartaria.
+            var locals = (await database.Table<cMarcaInLocal>().Where(i => i.estado == "N").ToListAsync())
+                .Where(i => !i.ES_GRUPAL).ToList();
             return locals.Select(l => new cMarcaIn
             {
                 idtarjeta = string.IsNullOrEmpty(l.idtarjeta) ? null : l.idtarjeta,
@@ -1708,6 +1734,85 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
             return true;
         }
 
+        // ── Marcas grupal automatica ─────────────────────────────────────────
+
+        public async Task<List<cMarcaInLocal>> GetMarcaGrupalPendienteAsync()
+        {
+            var l = await database.Table<cMarcaInLocal>().Where(i => i.ES_GRUPAL && i.estado == "N").ToListAsync();
+            return l.OrderBy(i => i.fecha_reg).ToList();
+        }
+
+        public async Task<List<cMarcaInLocal>> GetMarcaGrupalRechazadaAsync()
+        {
+            var l = await database.Table<cMarcaInLocal>().Where(i => i.ES_GRUPAL && i.estado == "R").ToListAsync();
+            return l.OrderByDescending(i => i.fecha_reg).ToList();
+        }
+
+        public async Task<int> SaveMarcaGrupalAsync(cMarcaIn marca, string idsupervisor)
+        {
+            return await database.InsertAsync(new cMarcaInLocal
+            {
+                idtarjeta = marca.idtarjeta,
+                fecha = marca.fecha,
+                hora = marca.hora,
+                idterminal = marca.idterminal,
+                tipo = marca.tipo,
+                idplanilla = marca.idplanilla,
+                idnumero = marca.idnumero,
+                estado = marca.estado?.ToString(),
+                fecha_reg = marca.fecha_reg,
+                long_reg = marca.long_reg,
+                lat_reg = marca.lat_reg,
+                imagen_reg = marca.imagen_reg,
+                host = marca.host,
+                dir_ip = marca.dir_ip,
+                IDSUPERVISOR = idsupervisor,
+                ES_GRUPAL = true,
+            });
+        }
+
+        public async Task<int> ActualizarEstadoMarcaGrupalAsync(int id, char estado, string? motivo)
+        {
+            var local = await database.Table<cMarcaInLocal>().FirstOrDefaultAsync(i => i.Id == id);
+            if (local is null) return 0;
+            local.estado = estado.ToString();
+            local.MOTIVO_RECHAZO = motivo;
+            if (estado == 'S') local.imagen_reg = null; // la foto ya esta en el servidor
+            return await database.UpdateAsync(local);
+        }
+
+        public async Task<cPh_Opciones?> GetPhOpcionesAsync()
+        {
+            var l = await database.Table<cPh_OpcionesLocal>().FirstOrDefaultAsync();
+            if (l is null) return null;
+            return new cPh_Opciones
+            {
+                IDOPCION = l.IDOPCION,
+                NUM_ALM = l.NUM_ALM,
+                UTILIZA_DESC = string.IsNullOrEmpty(l.UTILIZA_DESC) ? 'T' : l.UTILIZA_DESC[0],
+                MIN_PUSHBACK = l.MIN_PUSHBACK,
+            };
+        }
+
+        public async Task<int> SavePhOpcionesAsync(cPh_Opciones opciones)
+        {
+            var local = await database.Table<cPh_OpcionesLocal>().FirstOrDefaultAsync();
+            if (local is null)
+            {
+                return await database.InsertAsync(new cPh_OpcionesLocal
+                {
+                    IDOPCION = opciones.IDOPCION,
+                    NUM_ALM = opciones.NUM_ALM,
+                    UTILIZA_DESC = opciones.UTILIZA_DESC.ToString(),
+                    MIN_PUSHBACK = opciones.MIN_PUSHBACK,
+                });
+            }
+            local.NUM_ALM = opciones.NUM_ALM;
+            local.UTILIZA_DESC = opciones.UTILIZA_DESC.ToString();
+            local.MIN_PUSHBACK = opciones.MIN_PUSHBACK;
+            return await database.UpdateAsync(local);
+        }
+
         public async Task<cPortal_Config> GetPortalConfigAsync()
         {
             var l = await database.Table<cPortal_ConfigLocal>()
@@ -1734,6 +1839,7 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
                 LOCALIZACIONREQ = local.LOCALIZACIONREQ,
                 AUTOREGISTROROSTRO = local.AUTOREGISTROROSTRO,
                 VERLOGMARCAS = local.VERLOGMARCAS,
+                RETO_VIDA_GRUPAL = local.RETO_VIDA_GRUPAL,
                 MAPAPIKEY = local.MAPAPIKEY,
                 FACEDIST = local.FACEDIST,
                 FACETEXT = local.FACETEXT,
@@ -1768,6 +1874,7 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
                     local.LOCALIZACIONREQ = config.LOCALIZACIONREQ;
                     local.AUTOREGISTROROSTRO = config.AUTOREGISTROROSTRO;
                     local.VERLOGMARCAS = config.VERLOGMARCAS;
+                    local.RETO_VIDA_GRUPAL = config.RETO_VIDA_GRUPAL;
                     local.MAPAPIKEY = config.MAPAPIKEY;
                     local.FACEDIST = config.FACEDIST;
                     local.FACETEXT = config.FACETEXT;
@@ -1800,6 +1907,7 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
                         LOCALIZACIONREQ = config.LOCALIZACIONREQ,
                         AUTOREGISTROROSTRO = config.AUTOREGISTROROSTRO,
                         VERLOGMARCAS = config.VERLOGMARCAS,
+                        RETO_VIDA_GRUPAL = config.RETO_VIDA_GRUPAL,
                         MAPAPIKEY = config.MAPAPIKEY,
                         FACEDIST = config.FACEDIST,
                         FACETEXT = config.FACETEXT,

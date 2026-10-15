@@ -177,7 +177,7 @@
     private IEnumerable<EmpleadoExt>? empleado = null;
     private string UrlRetorno = "./principal";
     EmpleadoExt empleados = new();
-    private string Titulo = "Registro de Marcas Grupal";
+    private string Titulo = "Marcas Grupal dirigida";
     private bool InProcess = true;
     string coordenadas = "";
     double latitud = 0;
@@ -265,9 +265,25 @@
 
         try
         {
-            var request = new GeolocationRequest(GeolocationAccuracy.Best, TimeSpan.FromSeconds(10));
-            var location = await Geolocation.Default.GetLocationAsync(request);
-            return location;
+            // 1) Ultima posicion conocida si es muy reciente y precisa (respuesta inmediata)
+            var ultima = await Geolocation.Default.GetLastKnownLocationAsync();
+            if (ultima is not null
+                && (DateTimeOffset.Now - ultima.Timestamp) < TimeSpan.FromSeconds(60)
+                && (ultima.Accuracy ?? double.MaxValue) <= 100)
+                return ultima;
+
+            // 2) Mejor precision (GPS)
+            try
+            {
+                var request = new GeolocationRequest(GeolocationAccuracy.Best, TimeSpan.FromSeconds(10));
+                var location = await Geolocation.Default.GetLocationAsync(request);
+                if (location is not null) return location;
+            }
+            catch (Exception) { /* timeout de GPS: se intenta con precision media */ }
+
+            // 3) Respaldo con precision media (red/Wi-Fi) cuando el GPS no responde
+            var respaldo = new GeolocationRequest(GeolocationAccuracy.Medium, TimeSpan.FromSeconds(8));
+            return await Geolocation.Default.GetLocationAsync(respaldo);
         }
         catch (Exception ex)
         {
@@ -391,31 +407,26 @@
                             join g in grupoIds on e.IdGrupo equals g
                             select e;
 
+                IEnumerable<cMarca>? marcasApi = null;
                 if (sincronizar)
-                    marcasDelDia = await geoConnect.GetMarcaDiariaByGrupoTotal(phUsuario.GRUPOS!, DateTime.Now.ToString("yyyyMMdd"));
-                else
-                    marcasDelDia = (from m in await marcaDBLocal.GetMarcaIn(DateTime.Now)
-                                   select new cMarca
-                                   {
-                                       fecha = (DateTime)m.fecha!,
-                                       hora = m.hora,
-                                       idterminal = m.idterminal,
-                                       tipo = (int)m.tipo!,
-                                       idplanilla = m.idplanilla,
-                                       idnumero = m.idnumero,
-                                       estado =  m.estado.ToString(),
-                                       fecha_reg = m.fecha_reg,
-                                       long_reg = m.long_reg,
-                                       lat_reg = m.lat_reg,
-                                       imagen_reg = m.imagen_reg,
-                                       gps_cell = m.gps_cell,
-                                       dir_ip = m.dir_ip,
-                                   }).ToList();
+                    marcasApi = await geoConnect.GetMarcaDiariaByGrupoTotal(phUsuario.GRUPOS!, DateTime.Now.ToString("yyyyMMdd"));
 
-                if (marcasDelDia is null)
-                {
-                    marcasDelDia = new List<cMarca>();
-                }
+                // Las marcas guardadas en este dispositivo se suman siempre: el servidor puede tardar en
+                // reflejar una marca recién enviada y sin esto la casilla quedaría vacía y permitiría marcar de nuevo.
+                var marcasLocales = (from m in await marcaDBLocal.GetMarcaInDelDiaAsync(DateTime.Now)
+                                     select new cMarca
+                                     {
+                                         fecha = (DateTime)m.fecha!,
+                                         hora = m.hora,
+                                         idterminal = m.idterminal,
+                                         tipo = (int)m.tipo!,
+                                         idplanilla = m.idplanilla,
+                                         idnumero = m.idnumero,
+                                         estado = m.estado.ToString(),
+                                         fecha_reg = m.fecha_reg,
+                                     }).ToList();
+
+                marcasDelDia = (marcasApi ?? Enumerable.Empty<cMarca>()).Concat(marcasLocales).ToList();
 
 
                 if (empleadosTotal is not null)
@@ -593,8 +604,7 @@
              {
                  Resizable = false,
                  Draggable = false,
-                 Width = "310px",
-                 Height = "400px",
+                 Width = "340px",
              });
 
     }

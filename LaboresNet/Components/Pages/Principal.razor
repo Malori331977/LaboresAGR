@@ -32,7 +32,11 @@
         
         <RadzenCard class="menu-item-card rz-shadow-6" @onclick='() => NavigationManager.NavigateTo("/empleadomarcalist")'>
             <RadzenIcon Icon="groups" Style="font-size: 3rem; margin-bottom: 1rem; color: var(--primary-color)" />
-            <RadzenText TextStyle="TextStyle.Button" class="menu-label">Registro de Marcas Grupal</RadzenText>
+            <RadzenText TextStyle="TextStyle.Button" class="menu-label">Marcas Grupal dirigida</RadzenText>
+        </RadzenCard>
+        <RadzenCard class="menu-item-card rz-shadow-6" @onclick='() => NavigationManager.NavigateTo("/marcagrupalautomatica")'>
+            <RadzenIcon Icon="videocam" Style="font-size: 3rem; margin-bottom: 1rem; color: var(--primary-color)" />
+            <RadzenText TextStyle="TextStyle.Button" class="menu-label">Marcas Grupal automática</RadzenText>
         </RadzenCard>
         <RadzenCard class="menu-item-card rz-shadow-6" @onclick='() => NavigationManager.NavigateTo("/empleadoextlist")'>
             <RadzenIcon Icon="face" Style="font-size: 3rem; margin-bottom: 1rem; color: var(--primary-color)" />

@@ -1,4 +1,5 @@
 ﻿using com.gsitcr.geotime.Models;
+using com.gsitcr.geotime.Models.Request;
 using com.gsitcr.geotime.Models.Response;
 using PortalEmpleadoGeotime.Client.Modelo;
 
@@ -620,6 +621,12 @@ namespace PortalEmpleadoGeotime.Client.Data.Interfaces
 
         /// <summary>GetLaboresRecursos: lista los recursos; opcionalmente por unidad y/o concepto.</summary>
         public Task<IEnumerable<cPh_LaboresRecurso>?> GetLaboresRecursos(string? unidadId = null, int? idConcepto = null);
+
+        /// <summary>GetPhOpciones: opciones generales del sistema (ph_opciones).</summary>
+        public Task<cPh_Opciones?> GetPhOpciones();
+
+        /// <summary>PostMarcaGrupal: registra una marca grupal. Lanza excepción ante fallas técnicas.</summary>
+        public Task<cMarcaGrupalResultado> PostMarcaGrupal(cMarcaGrupalRequest request);
 
     }
 }

@@ -375,9 +375,31 @@
                 
             }
 
+            // Se suman las marcas de hoy guardadas en este dispositivo: el servidor puede tardar en
+            // reflejar una marca recién enviada. Se evitan duplicados por tipo + hora.
+            var localesHoy = (await marcaDBLocal.GetMarcaInDelDiaAsync(DateTime.Now))
+                .Where(m => m.idnumero == EmpleadoId)
+                .Select(m => new cMarca
+                {
+                    idnumero = m.idnumero,
+                    idplanilla = m.idplanilla,
+                    fecha = (DateTime)m.fecha!,
+                    hora = m.hora,
+                    tipo = (int)m.tipo!,
+                    idterminal = m.idterminal,
+                    estado = m.estado.ToString(),
+                    fecha_reg = m.fecha_reg,
+                    fecha_hora = ((DateTime)m.fecha!).Date + (TimeSpan.TryParse(m.hora, out var h) ? h : TimeSpan.Zero),
+                    registro = 0,
+                }).ToList();
+
+            var existentes = (marcasEmpleado ?? Enumerable.Empty<cMarca>()).ToList();
+            var nuevas = localesHoy.Where(l => !existentes.Any(e => e.tipo == l.tipo && e.hora == l.hora && e.fecha.Date == l.fecha.Date));
+            marcasEmpleado = existentes.Concat(nuevas).ToList();
+
             if (marcasEmpleado is not null)
             {
-                listMarcas = (from m in marcasEmpleado 
+                listMarcas = (from m in marcasEmpleado
                               select new MarcaExt
                               {
                                   registro = m.registro,
@@ -547,8 +569,7 @@
              {
                  Resizable = false,
                  Draggable = false,
-                 Width = "310px",
-                 Height = "400px",
+                 Width = "340px",
              });
 
     }
@@ -618,9 +639,25 @@
 
         try
         {
-            var request = new GeolocationRequest(GeolocationAccuracy.Best, TimeSpan.FromSeconds(10));
-            var location = await Geolocation.Default.GetLocationAsync(request);
-            return location;
+            // 1) Ultima posicion conocida si es muy reciente y precisa (respuesta inmediata)
+            var ultima = await Geolocation.Default.GetLastKnownLocationAsync();
+            if (ultima is not null
+                && (DateTimeOffset.Now - ultima.Timestamp) < TimeSpan.FromSeconds(60)
+                && (ultima.Accuracy ?? double.MaxValue) <= 100)
+                return ultima;
+
+            // 2) Mejor precision (GPS)
+            try
+            {
+                var request = new GeolocationRequest(GeolocationAccuracy.Best, TimeSpan.FromSeconds(10));
+                var location = await Geolocation.Default.GetLocationAsync(request);
+                if (location is not null) return location;
+            }
+            catch (Exception) { /* timeout de GPS: se intenta con precision media */ }
+
+            // 3) Respaldo con precision media (red/Wi-Fi) cuando el GPS no responde
+            var respaldo = new GeolocationRequest(GeolocationAccuracy.Medium, TimeSpan.FromSeconds(8));
+            return await Geolocation.Default.GetLocationAsync(respaldo);
         }
         catch (Exception ex)
         {
