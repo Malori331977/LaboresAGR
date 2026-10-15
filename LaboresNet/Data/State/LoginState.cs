@@ -18,8 +18,8 @@ namespace PortalEmpleadoGeotime.Client.Data.State
         public int TimeZone { get; set; } = 1;
 
         /// <summary>
-        /// IDCOMP de la compaÃ±Ã­a con que se iniciÃ³ sesiÃ³n. Solo identifica el tenant de la API
-        /// de Geotime; no es un dato de negocio ni filtra catÃ¡logos.
+        /// IDCOMP de la compañía con que se inició sesión. Solo identifica el tenant de la API
+        /// de Geotime; no es un dato de negocio ni filtra catálogos.
         /// </summary>
         public string CompaniaTenant { get; set; } = "";
 

@@ -427,16 +427,6 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
         public string?   IdEmpleadoAsignado   { get; set; }
     }
 
-    [Table("FiltroUsuario")]
-    public class FiltroUsuarioLocal
-    {
-        /// <summary>IdNumero del empleado autenticado.</summary>
-        [PrimaryKey]
-        public string IdUsuario  { get; set; } = "";
-        public string Pais       { get; set; } = "";
-        public string Compania   { get; set; } = "";
-    }
-
     [Table("cEstado")]
     public class EstadoLocal
     {

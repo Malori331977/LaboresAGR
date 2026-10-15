@@ -237,7 +237,7 @@
 			var laboresPendientes = laboresAuxiliares?.Where(l => l.EstadoId == 0).ToList();
 			if (string.IsNullOrEmpty(loginState.CompaniaTenant) && laboresPendientes?.Count > 0)
 			{
-			    await swal.FireAsync("AtenciÃ³n", "No se pudo determinar la compaÃ±Ã­a de la sesiÃ³n; las labores pendientes no se enviaron.", SweetAlertIcon.Warning);
+			    await swal.FireAsync("Atención", "No se pudo determinar la compañía de la sesión; las labores pendientes no se enviaron.", SweetAlertIcon.Warning);
 			    laboresPendientes = null;
 			}
 			if (laboresPendientes is not null && laboresPendientes.Count > 0)

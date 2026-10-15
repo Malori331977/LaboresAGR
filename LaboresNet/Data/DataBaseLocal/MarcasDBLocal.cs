@@ -172,7 +172,6 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
                         ON DELETE CASCADE
                 );").Wait();
 
-                database.CreateTableAsync<FiltroUsuarioLocal>().Wait();
 
                 database.ExecuteAsync(@"CREATE TABLE IF NOT EXISTS MigracionLabores (
                     Id    INTEGER NOT NULL,
@@ -2847,7 +2846,7 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
             var toInsert = new List<GeoAgrLaborAuxiliarLocal>();
             var toUpdate = new List<GeoAgrLaborAuxiliarLocal>();
 
-            // PrÃ³ximo IdRegistro disponible (MAX+1 o 1 si la tabla estÃ¡ vacÃ­a)
+            // Próximo IdRegistro disponible (MAX+1 o 1 si la tabla está vacía)
             long nextId = existingLocals.Count > 0
                 ? existingLocals.Max(l => l.IdRegistro) + 1
                 : 1;
@@ -2888,8 +2887,8 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
 
         public async Task<int> SaveGeoAgrLaborAuxiliarEstadoAsync(long idRegistro)
         {
-            // Marca el registro como "En Proceso de AutorizaciÃ³n" (1), excepto los detalles ya
-            // finalizados â€”2 (Aprobado) y 99 (Aplicado)â€”, que conservan su estado y no se reenvÃ­an.
+            // Marca el registro como "En Proceso de Autorización" (1), excepto los detalles ya
+            // finalizados —2 (Aprobado) y 99 (Aplicado)—, que conservan su estado y no se reenvían.
             await database.ExecuteAsync(@"UPDATE GeoAgrLaborAuxiliar SET EstadoId=? WHERE IdRegistro=? AND EstadoId NOT IN (2, 99)", 1, idRegistro);
             await database.ExecuteAsync(@"UPDATE GeoAgrLaborAuxiliarDet SET EstadoId=? WHERE IdRegistro=? AND EstadoId NOT IN (2, 99)", 1, idRegistro);
             return 1;
@@ -2909,9 +2908,9 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
             return true;
         }
 
-        // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+        // ════════════════════════════════════════════════════════════════════════
         // GeoAgrLaborAuxiliarDet
-        // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+        // ════════════════════════════════════════════════════════════════════════
 
         public async Task<List<GeoAgrLaborAuxiliarDet>> GetGeoAgrLaborAuxiliarDetAsync()
         {
@@ -2965,7 +2964,7 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
             var toInsert = new List<GeoAgrLaborAuxiliarDetLocal>();
             var toUpdate = new List<GeoAgrLaborAuxiliarDetLocal>();
 
-            // Cache de IdRegistro del encabezado padre para evitar mÃºltiples consultas
+            // Cache de IdRegistro del encabezado padre para evitar múltiples consultas
             var idRegistroCache = new Dictionary<(string, DateTime), long>();
 
             foreach (var item in list)
@@ -3072,42 +3071,6 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
                 IdRegistro          = l.IdRegistro,
                 IdEmpleadoAsignado  = l.IdEmpleadoAsignado,
             };
-
-        // ════════════════════════════════════════════════════════════════════════
-        // FiltroUsuario — último País y Compañía seleccionados por empleado
-        // ════════════════════════════════════════════════════════════════════════
-
-        /// <summary>
-        /// Devuelve el filtro guardado del usuario, o null si nunca ha seleccionado.
-        /// </summary>
-        public async Task<FiltroUsuarioLocal?> GetFiltroUsuarioAsync(string idUsuario)
-        {
-            return await database.Table<FiltroUsuarioLocal>()
-                                 .FirstOrDefaultAsync(f => f.IdUsuario == idUsuario);
-        }
-
-        /// <summary>
-        /// Inserta o actualiza el filtro del usuario (upsert por IdUsuario).
-        /// </summary>
-        public async Task SaveFiltroUsuarioAsync(string idUsuario, string pais, string compania)
-        {
-            var existing = await GetFiltroUsuarioAsync(idUsuario);
-            if (existing is null)
-            {
-                await database.InsertAsync(new FiltroUsuarioLocal
-                {
-                    IdUsuario = idUsuario,
-                    Pais      = pais,
-                    Compania  = compania
-                });
-            }
-            else
-            {
-                existing.Pais     = pais;
-                existing.Compania = compania;
-                await database.UpdateAsync(existing);
-            }
-        }
 
         // ════════════════════════════════════════════════════════════════════════
         // TicoFrut — GeoAgrLaborAuxiliar  (métodos por IdRegistro)
