@@ -96,13 +96,7 @@
 		InProcess = true;
 		if (await geoConnect.ApiDisponible())
 		{
-			if (await ticoFrutConnect.ApiDisponible())
-			{
-				await SincronizarBases();
-			}
-			else{
-				await swal.FireAsync("Atención", $"En este momento no hay comunicación con la base de datos de TicoFrut.", SweetAlertIcon.Warning);
-			}
+			await SincronizarBases();
 
 		}
 		else
@@ -136,19 +130,13 @@
 			var laborAuxiliarTask = marcaDBLocal.GetGeoAgrLaborAuxiliarAsync(loginState.CompaniaSeleccionada, loginState.Empleado.IdNumero!, DateTime.Now.AddDays(-35), DateTime.Now.AddDays(1));
 			var itemsLaborAuxiliarTask = marcaDBLocal.GetGeoAgrLaborAuxiliarDetAsync(loginState.CompaniaSeleccionada, loginState.Empleado.IdNumero!, DateTime.Now.AddDays(-35), DateTime.Now.AddDays(1));
 
-			// ── Sincronización TicoFrut ──────────────────────────────────────
-			var fincasTask = ticoFrutConnect.GetGeoAgrFinca();
-			var lotesTask = ticoFrutConnect.GetGeoAgrLote();
-			var otsTask = ticoFrutConnect.GetGeoAgrOt();
-			var otLaboresTask = ticoFrutConnect.GetGeoAgrOtLabor();
-			var recursosTask = ticoFrutConnect.GetGeoAgrRecursoConcepto();
 
 
 			await Task.WhenAll(empleadosTask, marcasTask, phPlanillasTask, phPeriodosTask,
 									marcasPendientesTask, ccostosTask, proyectosTask, faseproyectosTask,
 									phUsuarioTask, phLoginTask, distribucionPendienteTask, templatesFACESTask,
-									fincasTask, lotesTask, otsTask, laborAuxiliarTask, itemsLaborAuxiliarTask,
-									otLaboresTask, recursosTask, solicitudAuxLaborTask, estadosTask);
+									laborAuxiliarTask, itemsLaborAuxiliarTask,
+									solicitudAuxLaborTask, estadosTask);
 
 			var empleados = await empleadosTask;
 			var marcas = await marcasTask;
@@ -164,11 +152,6 @@
 			var templatesFACES = await templatesFACESTask;
 			var estados = await estadosTask;
 
-			var fincas = await fincasTask;
-			var lotes = await lotesTask;
-			var ots = await otsTask;
-			var otLabores = await otLaboresTask;
-			var recursos = await recursosTask;
 			var solicitudAuxLabor = await solicitudAuxLaborTask;
 			var itemsLaborAuxiliar = await itemsLaborAuxiliarTask;
 
@@ -210,11 +193,11 @@
 				await marcaDBLocal.SaveMarcaInAsync(listMarcas);
 			await marcaDBLocal.SaveTemplateFACEAsync(templatesFACES);
 
-			await marcaDBLocal.SaveGeoAgrFincaAsync(fincas);
-			await marcaDBLocal.SaveGeoAgrLoteAsync(lotes);
-			await marcaDBLocal.SaveGeoAgrOtAsync(ots);
-			await marcaDBLocal.SaveGeoAgrOtLaborAsync(otLabores);
-			await marcaDBLocal.SaveGeoAgrRecursoConceptoAsync(recursos);
+			// Catálogos de labores desde Geotime (todo o nada)
+			if (!await PortalEmpleadoGeotime.Client.Data.LaboresCatalogoSync.SincronizarAsync(geoConnect, marcaDBLocal))
+			{
+				await swal.FireAsync("Atención", "No se pudieron actualizar los catálogos de labores. Se mantienen los datos locales.", SweetAlertIcon.Warning);
+			}
 
 			if (solicitudAuxLabor is not null)
 			{

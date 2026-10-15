@@ -297,11 +297,11 @@
     private DateOnly fechaMin = DateOnly.FromDateTime(DateTime.Now.AddDays(-60));
 
     // Listas para los pop
-    private IEnumerable<GeoAgrFinca>?    listaFincas    = Enumerable.Empty<GeoAgrFinca>();
-    private IEnumerable<GeoAgrLote>?     listaLotes     = Enumerable.Empty<GeoAgrLote>();
-    private IEnumerable<GeoAgrOt>? listaOts = Enumerable.Empty<GeoAgrOt>();
-    private IEnumerable<GeoAgrOtLabor>?  listaOtLabores = Enumerable.Empty<GeoAgrOtLabor>();
-    private IEnumerable<GeoAgrRecursoConcepto>? listaRecursoConcepto = Enumerable.Empty<GeoAgrRecursoConcepto>();
+    private IEnumerable<cPh_LaboresFinca>? listaFincas = Enumerable.Empty<cPh_LaboresFinca>();
+    private IEnumerable<cPh_LaboresLote>? listaLotes = Enumerable.Empty<cPh_LaboresLote>();
+    private IEnumerable<cPh_LaboresOrdenTrabajo>? listaOts = Enumerable.Empty<cPh_LaboresOrdenTrabajo>();
+    private IEnumerable<cPh_LaboresActividad>? listaOtLabores = Enumerable.Empty<cPh_LaboresActividad>();
+    private IEnumerable<cPh_LaboresRecurso>? listaRecursoConcepto = Enumerable.Empty<cPh_LaboresRecurso>();
 
     private EncabezadoForm encabezado = new();
     private List<GeoAgrLaborAuxiliarDetExt> detalles = new();
@@ -387,11 +387,11 @@
         try
         {
             // ── Catálogos: independientes entre sí → se lanzan sin await ─────────
-            var tFincas    = marcaDBLocal.GetGeoAgrFincaAsync(loginState.CompaniaSeleccionada, loginState.PaisSeleccionado);
-            var tLotes     = marcaDBLocal.GetGeoAgrLoteAsync(loginState.CompaniaSeleccionada);
-            var tOts       = marcaDBLocal.GetGeoAgrOtAsync(loginState.CompaniaSeleccionada);
-            var tOtLabores = marcaDBLocal.GetGeoAgrOtLaborAsync(loginState.CompaniaSeleccionada);
-            var tRecursoConcepto = marcaDBLocal.GetGeoAgrRecursoConceptoAsync(loginState.CompaniaSeleccionada);
+            var tFincas    = marcaDBLocal.GetLaboresFincasAsync();
+            var tLotes     = marcaDBLocal.GetLaboresLotesAsync();
+            var tOts       = marcaDBLocal.GetLaboresOrdenesTrabajoAsync();
+            var tOtLabores = marcaDBLocal.GetLaboresActividadesAsync();
+            var tRecursoConcepto = marcaDBLocal.GetLaboresRecursosAsync();
 
             var empleadosTask = CargarEmpleados(DateTime.Today);
 
@@ -604,7 +604,7 @@
             await dialogService.OpenAsync<GeoAgrFincaPop>("Fincas",
                 new Dictionary<string, object>
                 {
-                    { "OnGeoAgrFincaSelected", EventCallback.Factory.Create<GeoAgrFinca>(this, HideModalFinca) },
+                    { "OnGeoAgrFincaSelected", EventCallback.Factory.Create<cPh_LaboresFinca>(this, HideModalFinca) },
                     { "fincas", listaFincas! }
                 }!,
                 new DialogOptions
@@ -622,12 +622,18 @@
         }
     }
 
-    private async Task HideModalFinca(GeoAgrFinca param)
+    private async Task HideModalFinca(cPh_LaboresFinca param)
     {
         if (detActivo is not null)
         {
-            detActivo.Bloque = param.Bloque;
-            detActivo.Finca  = param.Finca;
+            detActivo.Bloque = param.BloqueId;
+            detActivo.Finca  = param.Id;
+            // Al cambiar de finca, los datos dependientes ya no son válidos.
+            detActivo.Lote = null;
+            detActivo.Ot = null;
+            detActivo.NombreOt = "";
+            detActivo.Labor = null;
+            detActivo.NombreLabor = "";
         }
         dialogService.Close(true);
         StateHasChanged();
@@ -646,13 +652,13 @@
             }
 
             var lotesFiltrados = listaLotes?
-                .Where(l => l.Bloque == det.Bloque && l.Finca == det.Finca)
-                ?? Enumerable.Empty<GeoAgrLote>();
+                .Where(l => l.BloqueId == det.Bloque && l.FincaId == det.Finca)
+                ?? Enumerable.Empty<cPh_LaboresLote>();
 
             await dialogService.OpenAsync<GeoAgrLotePop>("Lotes",
                 new Dictionary<string, object>
                 {
-                    { "OnGeoAgrLoteSelected", EventCallback.Factory.Create<GeoAgrLote>(this, HideModalLote) },
+                    { "OnGeoAgrLoteSelected", EventCallback.Factory.Create<cPh_LaboresLote>(this, HideModalLote) },
                     { "lotes", lotesFiltrados }
                 }!,
                 new DialogOptions
@@ -670,10 +676,10 @@
         }
     }
 
-    private async Task HideModalLote(GeoAgrLote param)
+    private async Task HideModalLote(cPh_LaboresLote param)
     {
         if (detActivo is not null)
-            detActivo.Lote = param.Lote;
+            detActivo.Lote = param.Id;
         dialogService.Close(true);
         StateHasChanged();
     }
@@ -691,13 +697,13 @@
             }
 
             var otsFiltradas = listaOts?
-                .Where(l => l.Bloque == det.Bloque && l.Finca == det.Finca)
-                ?? Enumerable.Empty<GeoAgrOt>();
+                .Where(l => l.BloqueId == det.Bloque && l.FincaId == det.Finca)
+                ?? Enumerable.Empty<cPh_LaboresOrdenTrabajo>();
 
             await dialogService.OpenAsync<GeoAgrOtPop>("OTs",
                 new Dictionary<string, object>
                 {
-                    { "OnGeoAgrOtSelected", EventCallback.Factory.Create<GeoAgrOt>(this, HideModalOt) },
+                    { "OnGeoAgrOtSelected", EventCallback.Factory.Create<cPh_LaboresOrdenTrabajo>(this, HideModalOt) },
                     { "ots", otsFiltradas }
                 }!,
                 new DialogOptions
@@ -715,12 +721,15 @@
         }
     }
 
-    private async Task HideModalOt(GeoAgrOt param)
+    private async Task HideModalOt(cPh_LaboresOrdenTrabajo param)
     {
         if (detActivo is not null)
         {
-            detActivo.Ot = param.Ot;
-            detActivo.NombreOt = param.NombreOt!;
+            detActivo.Ot = param.Id;
+            detActivo.NombreOt = param.Descripcion;
+            // La actividad pertenece a una OT: se limpia al cambiar de OT.
+            detActivo.Labor = null;
+            detActivo.NombreLabor = "";
         }
         dialogService.Close(true);
         StateHasChanged();
@@ -739,13 +748,13 @@
             }
 
             var laboresFiltradas = listaOtLabores?
-                .Where(l => l.Bloque == det.Bloque && l.Finca == det.Finca && l.Ot == det.Ot)
-                ?? Enumerable.Empty<GeoAgrOtLabor>();
+                .Where(l => l.BloqueId == det.Bloque && l.FincaId == det.Finca && l.OrdenTrabajoId == det.Ot)
+                ?? Enumerable.Empty<cPh_LaboresActividad>();
 
             await dialogService.OpenAsync<GeoAgrOtLaborPop>("Labores",
                 new Dictionary<string, object>
                 {
-                    { "OnGeoAgrOtLaborSelected", EventCallback.Factory.Create<GeoAgrOtLabor>(this, HideModalOtLabor) },
+                    { "OnGeoAgrOtLaborSelected", EventCallback.Factory.Create<cPh_LaboresActividad>(this, HideModalOtLabor) },
                     { "otLabores", laboresFiltradas }
                 }!,
                 new DialogOptions
@@ -763,12 +772,12 @@
         }
     }
 
-    private async Task HideModalOtLabor(GeoAgrOtLabor param)
+    private async Task HideModalOtLabor(cPh_LaboresActividad param)
     {
         if (detActivo is not null)
         {
-            detActivo.Labor = param.Labor;
-            detActivo.NombreLabor = param.NombreLabor;
+            detActivo.Labor = param.Id;
+            detActivo.NombreLabor = param.Descripcion;
         }
         dialogService.Close(true);
         StateHasChanged();
@@ -779,13 +788,12 @@
         detActivo = det;
         try
         {
-            var recursosFiltrados = listaRecursoConcepto.Where(l => l.Compania == loginState.CompaniaSeleccionada)
-                ?? Enumerable.Empty<GeoAgrRecursoConcepto>();
+            var recursosFiltrados = listaRecursoConcepto ?? Enumerable.Empty<cPh_LaboresRecurso>();
 
             await dialogService.OpenAsync<GeoAgrRecursoConceptoPop>("Recursos",
                 new Dictionary<string, object>
                 {
-                    { "OnGeoAgrRecursoConceptoSelected", EventCallback.Factory.Create<GeoAgrRecursoConcepto>(this, HideModalRecurso) },
+                    { "OnGeoAgrRecursoConceptoSelected", EventCallback.Factory.Create<cPh_LaboresRecurso>(this, HideModalRecurso) },
                     { "recursos", recursosFiltrados }
                 }!,
                 new DialogOptions
@@ -807,15 +815,15 @@
         }
     }
 
-    private async Task HideModalRecurso(GeoAgrRecursoConcepto param)
+    private async Task HideModalRecurso(cPh_LaboresRecurso param)
     {
         if (detActivo is not null)
         {
-            detActivo.Recurso = param.Recurso;
-            detActivo.Unidad = param.Unidad;
+            detActivo.Recurso = param.Id;
+            detActivo.Unidad = param.UnidadId;
             detActivo.NombreRecurso = param.Descripcion;
         }
-        
+
         dialogService.Close(true);
         StateHasChanged();
     }

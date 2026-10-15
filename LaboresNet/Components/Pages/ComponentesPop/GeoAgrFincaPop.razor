@@ -1,23 +1,35 @@
-<RadzenDataGrid TItem="GeoAgrFinca" Data="@fincas"
+@if (fincas is null || !fincas.Any())
+{
+    <div style="text-align:center;padding:24px 0;color:#999;font-size:0.85rem;">
+        No hay fincas disponibles. Sincronice los datos para descargar los catálogos.
+    </div>
+}
+else
+{
+<RadzenDataGrid TItem="cPh_LaboresFinca" Data="@fincas"
                 AllowFiltering="true" AllowPaging="true" PageSize="10"
                 AllowSorting="true" FilterMode="FilterMode.SimpleWithMenu"
                 FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive"
                 RowClick="@OnSelect"
                 Style="width:100%;">
     <Columns>
-        <RadzenDataGridColumn TItem="GeoAgrFinca" Property="Finca" Title="Finca">
+        <RadzenDataGridColumn TItem="cPh_LaboresFinca" Property="Descripcion" Title="Finca">
             <Template Context="item">
                 <div style="display:flex;gap:8px;align-items:flex-start;padding:2px 0;">
                     <div class="emp-avatar" style="width:36px;height:36px;font-size:0.85rem;flex-shrink:0;">
-                        @(string.IsNullOrEmpty(item.Finca) ? "?" : item.Finca.Substring(0, 1).ToUpper())
+                        @(string.IsNullOrEmpty(item.Descripcion) ? "?" : item.Descripcion.Substring(0, 1).ToUpper())
                     </div>
                     <div style="flex:1;min-width:0;">
-                        <div style="font-weight:600;font-size:0.85rem;color:#212121;line-height:1.3;">@item.Finca</div>
-                        @if (!string.IsNullOrEmpty(item.Bloque))
+                        <div style="font-weight:600;font-size:0.85rem;color:#212121;line-height:1.3;">@item.Descripcion</div>
+                        <div class="emp-meta-row">
+                            <RadzenIcon Icon="tag" Style="font-size:0.78rem;color:#bbb;flex-shrink:0;" />
+                            @item.Id
+                        </div>
+                        @if (!string.IsNullOrEmpty(item.BloqueId))
                         {
                             <div class="emp-meta-row">
                                 <RadzenIcon Icon="map" Style="font-size:0.78rem;color:#bbb;flex-shrink:0;" />
-                                @item.Bloque
+                                Bloque @item.BloqueId
                             </div>
                         }
                     </div>
@@ -26,12 +38,13 @@
         </RadzenDataGridColumn>
     </Columns>
 </RadzenDataGrid>
+}
 
 @code {
-    [Parameter] public EventCallback<GeoAgrFinca> OnGeoAgrFincaSelected { get; set; }
-    [Parameter] public IEnumerable<GeoAgrFinca>? fincas { get; set; }
+    [Parameter] public EventCallback<cPh_LaboresFinca> OnGeoAgrFincaSelected { get; set; }
+    [Parameter] public IEnumerable<cPh_LaboresFinca>? fincas { get; set; }
 
-    void OnSelect(DataGridRowMouseEventArgs<GeoAgrFinca> args)
+    void OnSelect(DataGridRowMouseEventArgs<cPh_LaboresFinca> args)
     {
         OnGeoAgrFincaSelected.InvokeAsync(args.Data);
     }

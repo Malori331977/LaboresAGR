@@ -30,7 +30,7 @@
                 <img src="@imgLogo" alt="Logo" class="ln-logo-img" />
                 <div class="ln-app-title">@titulo</div>
                 <div style="margin-top: 8px;">
-                    <ApiSemaforo TicoFrutOk="@ticoFrutOk" GeoTimeOk="@geoTimeOk" Oscuro="true" />
+                    <ApiSemaforo GeoTimeOk="@geoTimeOk" Oscuro="true" />
                 </div>
             </div>
 
@@ -148,7 +148,6 @@
     bool sesionActiva = false;
 
     // Semáforo de APIs (null = verificando); se consulta una sola vez al cargar
-    bool? ticoFrutOk;
     bool? geoTimeOk;
 
     protected override async Task OnInitializedAsync()
@@ -165,13 +164,7 @@
         {
             parametros = await ConfigFile.GetConfigFile();
 
-            _ = ticoFrutConnect.ApiDisponible().ContinueWith(t => InvokeAsync(() =>
-            {
-                ticoFrutOk = t.IsCompletedSuccessfully && t.Result;
-                StateHasChanged();
-            }));
-
-            geoTimeOk = await geoConnect.ApiDisponible();
+geoTimeOk = await geoConnect.ApiDisponible();
             desconectado = geoTimeOk != true;
             await Inicializar();
         }

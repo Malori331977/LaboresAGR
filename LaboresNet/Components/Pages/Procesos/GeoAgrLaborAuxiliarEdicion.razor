@@ -247,9 +247,9 @@
             var tDets      = marcaDBLocal.GetGeoAgrLaborAuxiliarDetAsync(compania!, idEmpleado!, fechaDT, idRegistroActual);
             var tEmpleados = marcaDBLocal.GetEmpleadoAsync();
             var tEstados   = marcaDBLocal.GetEstadoAsync();
-            var tOts       = marcaDBLocal.GetGeoAgrOtAsync(loginState.CompaniaSeleccionada);
-            var tOtLabores = marcaDBLocal.GetGeoAgrOtLaborAsync(loginState.CompaniaSeleccionada);
-            var tRecursos  = marcaDBLocal.GetGeoAgrRecursoConceptoAsync(loginState.CompaniaSeleccionada);
+            var tOts       = marcaDBLocal.GetLaboresOrdenesTrabajoAsync();
+            var tOtLabores = marcaDBLocal.GetLaboresActividadesAsync();
+            var tRecursos  = marcaDBLocal.GetLaboresRecursosAsync();
 
             await Task.WhenAll(tHeader, tDets, tEmpleados, tEstados, tOts, tOtLabores, tRecursos);
 
@@ -283,11 +283,11 @@
                             Finca   = primero.Finca,
                             Lote    = primero.Lote,
                             Ot      = primero.Ot,
-                            NombreOt = tOts.Result?.FirstOrDefault(o => o.Ot == primero.Ot && o.Bloque == primero.Bloque && o.Finca == primero.Finca)?.NombreOt ?? "",
+                            NombreOt = tOts.Result?.FirstOrDefault(o => o.Id == primero.Ot && o.BloqueId == primero.Bloque && o.FincaId == primero.Finca)?.Descripcion ?? "",
                             Labor   = primero.Labor,
-                            NombreLabor = tOtLabores.Result?.FirstOrDefault(l => l.Labor == primero.Labor && l.Bloque == primero.Bloque && l.Finca == primero.Finca && l.Ot == primero.Ot)?.NombreLabor ?? "",
+                            NombreLabor = tOtLabores.Result?.FirstOrDefault(l => l.Id == primero.Labor && l.BloqueId == primero.Bloque && l.FincaId == primero.Finca && l.OrdenTrabajoId == primero.Ot)?.Descripcion ?? "",
                             Recurso = primero.Recurso,
-                            NombreRecurso = tRecursos.Result?.FirstOrDefault(r => r.Recurso == primero.Recurso)?.Descripcion ?? "",
+                            NombreRecurso = tRecursos.Result?.FirstOrDefault(r => r.Id == primero.Recurso)?.Descripcion ?? "",
                             Unidad  = primero.Unidad,
                             Empleados = g.Select(d => new GeoAgrLaborAuxiliarEmpleadoVM
                             {

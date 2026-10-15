@@ -394,60 +394,6 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
     // ─── TicoFrut local entities ────────────────────────────────────────────────
     // Las PKs son compuestas; las tablas se crean con SQL raw en MarcasDBLocal.
 
-    [Table("GeoAgrFinca")]
-    public class GeoAgrFincaLocal
-    {
-        public string? Compania  { get; set; }
-        public string? Pais      { get; set; }
-        public string? Bloque    { get; set; }
-        public string? Finca     { get; set; }
-    }
-
-    [Table("GeoAgrLote")]
-    public class GeoAgrLoteLocal
-    {
-        public string? Compania  { get; set; }
-        public string? Bloque    { get; set; }
-        public string? Finca     { get; set; }
-        public string? Lote      { get; set; }
-        public string? Pais      { get; set; }
-        public string? TipoSuelo { get; set; }
-        public string? Variedad  { get; set; }
-    }
-
-    [Table("GeoAgrOt")]
-    public class GeoAgrOtLocal
-    {
-        public string? Compania { get; set; }
-        public string? Bloque   { get; set; }
-        public string? Finca    { get; set; }
-        public string? Ot       { get; set; }
-        public string? NombreOt { get; set; }
-    }
-
-    [Table("GeoAgrOtLabor")]
-    public class GeoAgrOtLaborLocal
-    {
-        public string? Compania    { get; set; }
-        public string? Bloque      { get; set; }
-        public string? Finca       { get; set; }
-        public string? Ot          { get; set; }
-        public string? Labor       { get; set; }
-        public string? NombreLabor { get; set; }
-    }
-
-    [Table("GeoAgrRecursoConcepto")]
-    public class GeoAgrRecursoConceptoLocal
-    {
-        public string?  Compania    { get; set; }
-        public string?  Recurso     { get; set; }
-        public string?  Descripcion { get; set; }
-        public string?  TipoFactorMo { get; set; }
-        public decimal? FactorMo    { get; set; }
-        public string?  ConceptoMo  { get; set; }
-        public string? Unidad { get; set; }
-    }
-
     [Table("GeoAgrLaborAuxiliar")]
     public class GeoAgrLaborAuxiliarLocal
     {

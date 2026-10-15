@@ -1,23 +1,31 @@
-<RadzenDataGrid TItem="GeoAgrOt" Data="@ots"
+@if (ots is null || !ots.Any())
+{
+    <div style="text-align:center;padding:24px 0;color:#999;font-size:0.85rem;">
+        No hay órdenes de trabajo para la finca seleccionada. Sincronice los datos para descargar los catálogos.
+    </div>
+}
+else
+{
+<RadzenDataGrid TItem="cPh_LaboresOrdenTrabajo" Data="@ots"
                 AllowFiltering="true" AllowPaging="true" PageSize="10"
                 AllowSorting="true" FilterMode="FilterMode.SimpleWithMenu"
                 FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive"
                 RowClick="@OnSelect"
                 Style="width:100%;">
     <Columns>
-        <RadzenDataGridColumn TItem="GeoAgrOt" Property="NombreOt" Title="Orden de Trabajo">
+        <RadzenDataGridColumn TItem="cPh_LaboresOrdenTrabajo" Property="Descripcion" Title="Orden de Trabajo">
             <Template Context="item">
                 <div style="display:flex;gap:8px;align-items:flex-start;padding:2px 0;">
                     <div class="emp-avatar" style="width:36px;height:36px;font-size:0.85rem;flex-shrink:0;">
-                        @(string.IsNullOrEmpty(item.NombreOt) ? "?" : item.NombreOt.Substring(0, 1).ToUpper())
+                        @(string.IsNullOrEmpty(item.Descripcion) ? "?" : item.Descripcion.Substring(0, 1).ToUpper())
                     </div>
                     <div style="flex:1;min-width:0;">
-                        <div style="font-weight:600;font-size:0.85rem;color:#212121;line-height:1.3;">@item.NombreOt</div>
-                        @if (!string.IsNullOrEmpty(item.Ot))
+                        <div style="font-weight:600;font-size:0.85rem;color:#212121;line-height:1.3;">@item.Descripcion</div>
+                        @if (!string.IsNullOrEmpty(item.Id))
                         {
                             <div class="emp-meta-row">
                                 <RadzenIcon Icon="tag" Style="font-size:0.78rem;color:#bbb;flex-shrink:0;" />
-                                @item.Ot
+                                @item.Id
                             </div>
                         }
                     </div>
@@ -26,12 +34,13 @@
         </RadzenDataGridColumn>
     </Columns>
 </RadzenDataGrid>
+}
 
 @code {
-    [Parameter] public EventCallback<GeoAgrOt> OnGeoAgrOtSelected { get; set; }
-    [Parameter] public IEnumerable<GeoAgrOt>? ots { get; set; }
+    [Parameter] public EventCallback<cPh_LaboresOrdenTrabajo> OnGeoAgrOtSelected { get; set; }
+    [Parameter] public IEnumerable<cPh_LaboresOrdenTrabajo>? ots { get; set; }
 
-    void OnSelect(DataGridRowMouseEventArgs<GeoAgrOt> args)
+    void OnSelect(DataGridRowMouseEventArgs<cPh_LaboresOrdenTrabajo> args)
     {
         OnGeoAgrOtSelected.InvokeAsync(args.Data);
     }
