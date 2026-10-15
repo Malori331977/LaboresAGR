@@ -173,10 +173,15 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
 
 
                 database.ExecuteAsync(@"CREATE TABLE IF NOT EXISTS MigracionLabores (
-                    Id    INTEGER NOT NULL,
-                    Fecha TEXT    NOT NULL,
+                    Id            INTEGER NOT NULL,
+                    Fecha         TEXT    NOT NULL,
+                    MaxIdRegistro INTEGER NOT NULL DEFAULT 0,
                     PRIMARY KEY (Id)
                 );").Wait();
+
+                // Bases creadas antes de existir la columna de semilla.
+                try { database.ExecuteAsync("ALTER TABLE MigracionLabores ADD COLUMN MaxIdRegistro INTEGER NOT NULL DEFAULT 0").Wait(); }
+                catch { /* la columna ya existe */ }
 
                 MigrarDesdeBaseAnterior();
 
@@ -306,6 +311,8 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
                     Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                     "AvancesMoDB", "LaboresDatabase.db3");
 
+                long semilla = 0;
+
                 if (File.Exists(rutaAnterior))
                 {
                     try
@@ -324,7 +331,11 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
                                 database.InsertAsync(cfg).Wait();
                         }
 
-                        // 2. Labores auxiliares no finalizadas y sus detalles.
+                        // 2. Semilla de IdRegistro: el mayor id de la base anterior (incluye finalizadas).
+                        if (Existe("GeoAgrLaborAuxiliar"))
+                            semilla = anterior.ExecuteScalar<long>("SELECT IFNULL(MAX(IdRegistro), 0) FROM GeoAgrLaborAuxiliar");
+
+                        // 3. Labores auxiliares no finalizadas y sus detalles.
                         if (Existe("GeoAgrLaborAuxiliar") && Existe("GeoAgrLaborAuxiliarDet"))
                         {
                             var encabezados = anterior.Query<GeoAgrLaborAuxiliarLocal>(
@@ -361,8 +372,8 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
                 }
 
                 database.ExecuteAsync(
-                    "INSERT OR REPLACE INTO MigracionLabores (Id, Fecha) VALUES (1, ?)",
-                    DateTime.Now.ToString("yyyyMMddHHmmss")).Wait();
+                    "INSERT OR REPLACE INTO MigracionLabores (Id, Fecha, MaxIdRegistro) VALUES (1, ?, ?)",
+                    DateTime.Now.ToString("yyyyMMddHHmmss"), semilla).Wait();
             }
             catch (Exception e)
             {
@@ -2836,19 +2847,28 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
             if (list.Count == 0) return 0;
 
             var existingLocals = await database.Table<GeoAgrLaborAuxiliarLocal>().ToListAsync();
-            var existingDict   = existingLocals.ToDictionary(l => (l.IdEmpleado!, l.Fecha));
+            // La llave real es IdRegistro: un mismo empleado puede tener varias labores el mismo dia.
+            var porRegistro = existingLocals
+                .GroupBy(l => l.IdRegistro)
+                .ToDictionary(g => g.Key, g => g.First());
+            var porEmpleadoFecha = existingLocals
+                .GroupBy(l => (l.IdEmpleado!, l.Fecha))
+                .ToDictionary(g => g.Key, g => g.First());
 
             var toInsert = new List<GeoAgrLaborAuxiliarLocal>();
             var toUpdate = new List<GeoAgrLaborAuxiliarLocal>();
 
-            // Próximo IdRegistro disponible (MAX+1 o 1 si la tabla está vacía)
-            long nextId = existingLocals.Count > 0
-                ? existingLocals.Max(l => l.IdRegistro) + 1
-                : 1;
+            long nextId = await SiguienteIdRegistroAsync();
 
             foreach (var item in list)
             {
-                if (existingDict.TryGetValue((item.IdEmpleado, item.Fecha), out var local))
+                GeoAgrLaborAuxiliarLocal? local = null;
+                if (item.IdRegistro != 0)
+                    porRegistro.TryGetValue(item.IdRegistro, out local);
+                else
+                    porEmpleadoFecha.TryGetValue((item.IdEmpleado, item.Fecha), out local);
+
+                if (local is not null)
                 {
                     local.Comentarios = item.Comentarios;
                     toUpdate.Add(local);
@@ -2857,7 +2877,7 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
                 {
                     toInsert.Add(new GeoAgrLaborAuxiliarLocal
                     {
-                        IdRegistro  = nextId++,
+                        IdRegistro  = item.IdRegistro != 0 ? item.IdRegistro : nextId++,
                         IdEmpleado  = item.IdEmpleado,
                         Fecha       = item.Fecha,
                         Comentarios = item.Comentarios,
@@ -2872,12 +2892,24 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
                     db.Execute(
                         @"UPDATE GeoAgrLaborAuxiliar
                           SET Comentarios=?
-                          WHERE IdRegistro=? AND IdEmpleado=? AND Fecha=?",
-                        u.Comentarios, u.IdRegistro, u.IdEmpleado, u.Fecha);
+                          WHERE IdRegistro=?",
+                        u.Comentarios, u.IdRegistro);
                 if (toInsert.Count > 0)
                     totalAffected += db.InsertAll(toInsert);
             });
             return totalAffected;
+        }
+
+        /// <summary>
+        /// Siguiente IdRegistro libre: MAX(local, semilla de migracion) + 1. La semilla es el mayor
+        /// IdRegistro de la base anterior (incluidas las labores finalizadas que no se copiaron),
+        /// para no reutilizar ids que el servidor ya conoce.
+        /// </summary>
+        private async Task<long> SiguienteIdRegistroAsync()
+        {
+            long maxLocal = await database.ExecuteScalarAsync<long>("SELECT IFNULL(MAX(IdRegistro), 0) FROM GeoAgrLaborAuxiliar");
+            long semilla = await database.ExecuteScalarAsync<long>("SELECT IFNULL(MAX(MaxIdRegistro), 0) FROM MigracionLabores");
+            return Math.Max(maxLocal, semilla) + 1;
         }
 
         public async Task<int> SaveGeoAgrLaborAuxiliarEstadoAsync(long idRegistro)
@@ -2954,32 +2986,38 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
             if (list.Count == 0) return 0;
 
             var existingLocals = await database.Table<GeoAgrLaborAuxiliarDetLocal>().ToListAsync();
-            var existingDict   = existingLocals.ToDictionary(l => (l.IdEmpleado!, l.Fecha, l.Item, l.IdEmpleadoAsignado!));
+            // Llave real: (IdRegistro, Item, IdEmpleadoAsignado); IdEmpleado y Fecha salen del encabezado.
+            var existingDict = existingLocals
+                .GroupBy(l => (l.IdRegistro, l.Item, l.IdEmpleadoAsignado ?? ""))
+                .ToDictionary(g => g.Key, g => g.First());
 
             var toInsert = new List<GeoAgrLaborAuxiliarDetLocal>();
             var toUpdate = new List<GeoAgrLaborAuxiliarDetLocal>();
 
-            // Cache de IdRegistro del encabezado padre para evitar múltiples consultas
+            // Cache de IdRegistro del encabezado padre para detalles que llegan sin IdRegistro
             var idRegistroCache = new Dictionary<(string, DateTime), long>();
 
             foreach (var item in list)
             {
                 var idEmpAsig = item.IdEmpleadoAsignado ?? item.IdEmpleado;
 
-                // Resolver IdRegistro del encabezado padre
-                var cacheKey = (item.IdEmpleado, item.Fecha);
-                if (!idRegistroCache.TryGetValue(cacheKey, out long idRegistro))
+                long idRegistro = item.IdRegistro;
+                if (idRegistro == 0)
                 {
-                    var padre = await database.Table<GeoAgrLaborAuxiliarLocal>()
-                        .FirstOrDefaultAsync(l => l.IdEmpleado == item.IdEmpleado
-                                               && l.Fecha      == item.Fecha);
-                    idRegistro = padre?.IdRegistro ?? 0;
-                    idRegistroCache[cacheKey] = idRegistro;
+                    var cacheKey = (item.IdEmpleado, item.Fecha);
+                    if (!idRegistroCache.TryGetValue(cacheKey, out idRegistro))
+                    {
+                        var padre = await database.Table<GeoAgrLaborAuxiliarLocal>()
+                            .Where(l => l.IdEmpleado == item.IdEmpleado && l.Fecha == item.Fecha)
+                            .OrderByDescending(l => l.IdRegistro)
+                            .FirstOrDefaultAsync();
+                        idRegistro = padre?.IdRegistro ?? 0;
+                        idRegistroCache[cacheKey] = idRegistro;
+                    }
                 }
 
-                if (existingDict.TryGetValue((item.IdEmpleado, item.Fecha, item.Item, idEmpAsig), out var local))
+                if (existingDict.TryGetValue((idRegistro, item.Item, idEmpAsig), out var local))
                 {
-                    local.IdRegistro          = idRegistro;
                     local.Bloque              = item.Bloque;
                     local.Finca               = item.Finca;
                     local.Lote                = item.Lote;
@@ -3021,12 +3059,12 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
                 foreach (var u in toUpdate)
                     db.Execute(
                         @"UPDATE GeoAgrLaborAuxiliarDet
-                          SET IdRegistro=?, Bloque=?, Finca=?, Lote=?, Ot=?, Labor=?, Recurso=?,
+                          SET Bloque=?, Finca=?, Lote=?, Ot=?, Labor=?, Recurso=?,
                               CantidadRendimiento=?, Unidad=?, HorasAprobadas=?, EstadoId=?
-                          WHERE IdEmpleado=? AND Fecha=? AND Item=? AND IdEmpleadoAsignado=?",
-                        u.IdRegistro, u.Bloque, u.Finca, u.Lote, u.Ot, u.Labor, u.Recurso,
+                          WHERE IdRegistro=? AND Item=? AND IdEmpleadoAsignado=?",
+                        u.Bloque, u.Finca, u.Lote, u.Ot, u.Labor, u.Recurso,
                         u.CantidadRendimiento, u.Unidad, u.HorasAprobadas, u.EstadoId,
-                        u.IdEmpleado, u.Fecha, u.Item, u.IdEmpleadoAsignado);
+                        u.IdRegistro, u.Item, u.IdEmpleadoAsignado);
                 if (toInsert.Count > 0)
                     totalAffected += db.InsertAll(toInsert);
             });
@@ -3082,10 +3120,7 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
         /// </summary>
         public async Task<long> InsertGeoAgrLaborAuxiliarAsync(GeoAgrLaborAuxiliar labor)
         {
-            var existingLocals = await database.Table<GeoAgrLaborAuxiliarLocal>().ToListAsync();
-            long nextId = existingLocals.Count > 0
-                ? existingLocals.Max(l => l.IdRegistro) + 1
-                : 1;
+            long nextId = await SiguienteIdRegistroAsync();
 
             var local = new GeoAgrLaborAuxiliarLocal
             {
