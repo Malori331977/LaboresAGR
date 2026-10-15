@@ -13,10 +13,12 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
 		public event EventHandler<JobExecutedEventArgs> JobExecuted;
         private readonly IGeoTimeConnect _geoConnect;
         private readonly LoginState _loginState;
-        public PeriodicExecutor(IGeoTimeConnect geoConnect, LoginState loginState)
+        private readonly IMarcaGrupalService _marcaGrupal;
+        public PeriodicExecutor(IGeoTimeConnect geoConnect, LoginState loginState, IMarcaGrupalService marcaGrupal)
         {
             _geoConnect = geoConnect;
             _loginState = loginState;
+            _marcaGrupal = marcaGrupal;
         }
         void OnJobExecuted()
 		{
@@ -97,6 +99,9 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
                     }
 
                 }
+
+                // Marcas grupal automatica pendientes (se envian a /MarcaGrupal con sus reglas)
+                await _marcaGrupal.SincronizarPendientes();
             }
             catch (Exception e)
             {

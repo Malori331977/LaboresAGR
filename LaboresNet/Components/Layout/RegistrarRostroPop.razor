@@ -1,16 +1,36 @@
-﻿<div class="row">
-
-    <div class="col ml-10">
-        <div class="container-canvas">
-            <video id="video" autoplay muted></video>
-            <canvas id="overlay"></canvas>
+<div class="face-panel">
+    <div class="container-canvas">
+        <video id="video" autoplay muted playsinline></video>
+        <canvas id="overlay"></canvas>
+        <div class="face-chip face-chip-@EstadoCss" role="status" aria-live="polite">
+            <RadzenIcon Icon="@EstadoIcono" />
+            <span>@EstadoTitulo</span>
         </div>
     </div>
+
+    <div class="face-msg face-msg-@EstadoCss">
+        <RadzenIcon Icon="@(Estado == EstadoCamara.Error ? "error_outline" : "lightbulb")" />
+        <span>@EstadoMensaje</span>
+    </div>
+
+    @if (Cameras is not null && Cameras.Count > 1)
+    {
+        <div class="face-camera-select">
+            <RadzenIcon Icon="photo_camera" />
+            <RadzenDropDown @bind-Value="SelectedCameraId"
+                            Data="@Cameras"
+                            TextProperty="Label"
+                            ValueProperty="DeviceId"
+                            Change="@OnCameraChanged"
+                            Style="flex: 1; min-width: 0;" />
+        </div>
+    }
+
+    @if (Estado == EstadoCamara.Error)
+    {
+        <RadzenButton Text="Reintentar" Icon="refresh" Click="@Reintentar" Style="width: 100%; margin-top: 0.75rem; background: #017F01;" />
+    }
 </div>
-@if (InProcessRec)
-{
-    <SpinnerControl></SpinnerControl>
-}
 
 
 @code {
@@ -18,38 +38,161 @@
     [Parameter] public EventCallback<bool> OnRegistro { get; set; }
     [Parameter] public bool ProcesoIniciado { get; set; }
 
-    private bool InProcessRec = false;
-    //private bool CamaraEncendida = false;
-    private List<string> descriptores = new();
+    private enum EstadoCamara { Iniciando, Buscando, Comparando, Error }
 
+    private EstadoCamara Estado = EstadoCamara.Iniciando;
+    private string? ErrorMensaje;
+
+    private string EstadoCss => Estado.ToString().ToLowerInvariant();
+
+    private bool FalloCaptura = false;
+
+    private string EstadoIcono => Estado switch
+    {
+        EstadoCamara.Iniciando => "hourglass_top",
+        EstadoCamara.Buscando => "face",
+        _ => FalloCaptura ? "face_retouching_off" : "videocam_off"
+    };
+
+    private string EstadoTitulo => Estado switch
+    {
+        EstadoCamara.Iniciando => "Iniciando cámara…",
+        EstadoCamara.Buscando => "Capturando tu rostro…",
+        _ => FalloCaptura ? "Rostro no capturado" : "Cámara no disponible"
+    };
+
+    private string EstadoMensaje => Estado switch
+    {
+        EstadoCamara.Iniciando => "Un momento, estamos preparando la cámara.",
+        EstadoCamara.Buscando => "Mira a la cámara, centra tu rostro en el óvalo y mantente quieto.",
+        _ => ErrorMensaje ?? "No se pudo iniciar la cámara."
+    };
+
+    private bool CamaraEncendida = false;
+    private List<CameraDevice> Cameras = new();
+    private string? SelectedCameraId = null;
+
+    private class CameraDevice
+    {
+        public string DeviceId { get; set; } = string.Empty;
+        public string Label { get; set; } = string.Empty;
+    }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
         {
+            await IniciarFlujoAsync(cargarCamaras: true);
+        }
+    }
+
+    private async Task LoadAvailableCameras()
+    {
+        try
+        {
+            // getCameras devuelve un arreglo de objetos {deviceId, label}, no un string JSON
+            var cameraList = await JsRuntime.InvokeAsync<List<CameraDevice>>("getCameras");
+            cameraList = cameraList?.Where(c => !string.IsNullOrEmpty(c.DeviceId)).ToList();
+            if (cameraList is not null && cameraList.Count > 0)
+            {
+                Cameras = cameraList;
+                var savedId = await JsRuntime.InvokeAsync<string?>("loadPreferredCamera");
+                SelectedCameraId = !string.IsNullOrEmpty(savedId) && Cameras.Any(c => c.DeviceId == savedId)
+                    ? savedId
+                    : Cameras[0].DeviceId;
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading cameras: {ex.Message}");
+        }
+    }
+
+    private async Task OnCameraChanged(object value)
+    {
+        if (value is not null && CamaraEncendida)
+        {
             try
             {
-                await OnIniciarCamara();
-                await OnRegistrarRostro();
+                await JsRuntime.InvokeVoidAsync("setPreferredCamera", SelectedCameraId);
+                await OnApagarCamara();
+                await Task.Delay(500);
+                CamaraEncendida = await OnIniciarCamara();
             }
-            catch (Exception e)
+            catch (Exception ex)
             {
-                await swal.FireAsync("Atención", $"Se ha presentado un error al iniciar la cámara. Detalle de error: {(e.InnerException == null ? e.Message : e.InnerException)}", SweetAlertIcon.Error);
+                await swal.FireAsync("Error", $"Error al cambiar la cámara: {ex.Message}", SweetAlertIcon.Error);
             }
         }
     }
 
-    private async Task OnRegistrarRostro()
+    private async Task IniciarFlujoAsync(bool cargarCamaras)
     {
-        InProcessRec = true;
-        StateHasChanged();
         try
         {
-            await JsRuntime.InvokeVoidAsync("registerFace");
+            Estado = EstadoCamara.Iniciando;
+            ErrorMensaje = null;
+            StateHasChanged();
+
+            if (cargarCamaras)
+                await LoadAvailableCameras();
+
+            CamaraEncendida = await OnIniciarCamara();
+
+            if (!CamaraEncendida)
+            {
+                Estado = EstadoCamara.Error;
+                ErrorMensaje = "No se pudo iniciar la cámara. Revisa los permisos de la aplicación e inténtalo de nuevo.";
+                StateHasChanged();
+                return;
+            }
+
+            // Sin permiso previo enumerateDevices no devuelve deviceId; recargar ya con la cámara activa
+            if (cargarCamaras && Cameras.Count < 2)
+                await LoadAvailableCameras();
+
+            await OnRegistrarRostro();
+        }
+        catch (Exception e)
+        {
+            Estado = EstadoCamara.Error;
+            ErrorMensaje = "Se presentó un error al iniciar la cámara.";
+            StateHasChanged();
+            await swal.FireAsync("Atención", $"Se ha presentado un error al iniciar la cámara. Detalle de error: {(e.InnerException == null ? e.Message : e.InnerException)}", SweetAlertIcon.Error);
+        }
+    }
+
+    private async Task Reintentar()
+    {
+        FalloCaptura = false;
+        await OnApagarCamara();
+        await IniciarFlujoAsync(cargarCamaras: false);
+    }
+
+    private async Task OnRegistrarRostro()
+    {
+        Estado = EstadoCamara.Buscando;
+        StateHasChanged();
+        int resultado = 0;
+        try
+        {
+            // 1 = rostro registrado, 2 = captura ya completa, 0 = no se logró capturar
+            resultado = await JsRuntime.InvokeAsync<int>("registerFace");
         }
         catch (Exception e)
         {
             await swal.FireAsync("Atención", $"Se ha presentado un error al procesar el rostro.  Detalle de error: {(e.InnerException == null ? e.Message : e.InnerException)}", SweetAlertIcon.Error);
+        }
+
+        if (resultado == 0)
+        {
+            // Se deja el diálogo abierto con la cámara encendida para reintentar
+            FalloCaptura = true;
+            Estado = EstadoCamara.Error;
+            ErrorMensaje = "No se logró capturar el rostro. Mejora la iluminación, acércate a la cámara y presiona Reintentar.";
+            StateHasChanged();
+            return;
         }
 
         await OnApagarCamara();
@@ -64,15 +207,18 @@
 
     }
 
-    private async Task OnIniciarCamara()
+    private async Task<bool> OnIniciarCamara()
     {
-        if (!ProcesoIniciado)
+        if (!string.IsNullOrEmpty(SelectedCameraId))
         {
-            await JsRuntime.InvokeVoidAsync("startMedia");
+            await JsRuntime.InvokeVoidAsync("setPreferredCamera", SelectedCameraId);
         }
-        else
-            await JsRuntime.InvokeVoidAsync("startCamera");
-       
+
+        int resultado = !ProcesoIniciado
+            ? await JsRuntime.InvokeAsync<int>("startMedia")
+            : await JsRuntime.InvokeAsync<int>("startCamera");
+
+        return resultado == 1;
     }
 
     private async Task OnApagarCamara()

@@ -1,0 +1,354 @@
+﻿@page "/marcagrupalautomatica"
+@layout MainLayout
+@using PortalEmpleadoGeotime.Client.Data.DataBaseLocal
+@inject IMarcaGrupalService marcaGrupalService
+
+<div class="mg">
+    <PageReturn Titulo="@(resumen is null ? "Marcas Grupal automática" : "Resumen de la sesión")" UrlRetorno="./principal" />
+
+    @if (InProcess)
+    {
+        <SpinnerControl></SpinnerControl>
+    }
+    else if (resumen is not null)
+    {
+        <section class="mg-resumen">
+            <div class="mg-subtitulo">@ReglasMarcaGrupal.NombreTipo(resumen.TipoMarca) · @resumen.Inicio.ToString("HH:mm") a @resumen.Fin.ToString("HH:mm")</div>
+            <div class="mg-contadores mg-contadores-3">
+                <div class="mg-contador"><div class="mg-num">@resumen.Esperados.Count</div><div>Esperados</div></div>
+                <div class="mg-contador mg-ok"><div class="mg-num">@resumen.Registrados.Count</div><div>Registrados</div></div>
+                <div class="mg-contador mg-aviso"><div class="mg-num">@resumen.Pendientes.Count</div><div>Pendientes</div></div>
+            </div>
+            @if (resumen.Pendientes.Count > 0)
+            {
+                <h3 class="mg-seccion">Pendientes</h3>
+                @foreach (var e in resumen.Pendientes)
+                {
+                    <div class="mg-fila"><div class="mg-avatar">@Inicial(e.Nombre)</div><div class="mg-fila-texto">@e.Nombre</div></div>
+                }
+            }
+            <h3 class="mg-seccion">Registrados</h3>
+            @foreach (var r in resumen.Registrados)
+            {
+                <div class="mg-fila"><RadzenIcon Icon="check_circle" class="mg-icono-ok" /><div class="mg-fila-texto">@r.Empleado.Nombre</div><span class="mg-hora">@r.Hora</span></div>
+            }
+        </section>
+        <footer class="mg-pie mg-pie-2">
+            <button class="mg-btn-secundario" @onclick="VolverALista">Volver a la lista</button>
+            <button class="mg-btn-primario" @onclick="OtraMarca">Otra marca</button>
+        </footer>
+    }
+    else
+    {
+        <section class="mg-contadores">
+            <div class="mg-contador"><div class="mg-num">@Contar(EstadoColaborador.Pendiente)</div><div>Pendientes</div></div>
+            <div class="mg-contador"><div class="mg-num mg-verde">@Contar(EstadoColaborador.EnJornada)</div><div>En jornada</div></div>
+            <div class="mg-contador"><div class="mg-num mg-naranja">@Contar(EstadoColaborador.EnDescanso)</div><div>En descanso</div></div>
+            <div class="mg-contador"><div class="mg-num mg-gris">@Contar(EstadoColaborador.Finalizado)</div><div>Finalizados</div></div>
+        </section>
+
+        <nav class="mg-filtros" aria-label="Filtrar colaboradores">
+            @foreach (var f in filtros)
+            {
+                var activo = !soloSinRostro && filtro == f.Estado;
+                <button class="mg-chip @(activo ? "activo" : "")" aria-pressed="@activo" @onclick="() => { filtro = f.Estado; soloSinRostro = false; }">@f.Texto</button>
+            }
+            @if (SinRostro > 0)
+            {
+                <button class="mg-chip mg-chip-sin-rostro @(soloSinRostro ? "activo" : "")" aria-pressed="@soloSinRostro" @onclick="() => { filtro = null; soloSinRostro = true; }">Sin rostro @SinRostro</button>
+            }
+        </nav>
+
+        @if (SinRostro > 0)
+        {
+            <div class="mg-aviso-rostro" role="note">
+                <RadzenIcon Icon="warning" /> @SinRostro @(SinRostro == 1 ? "colaborador no tiene" : "colaboradores no tienen") rostro registrado y no @(SinRostro == 1 ? "podrá" : "podrán") marcar con la cámara
+            </div>
+        }
+
+        <section class="mg-lista">
+            @foreach (var f in FilasFiltradas)
+            {
+                <div class="mg-fila">
+                    <div class="mg-avatar @(f.TieneRostro ? "" : "mg-avatar-sin-rostro")">
+                        @Inicial(f.Empleado.Nombre)
+                        <span class="mg-insignia @(f.TieneRostro ? "mg-insignia-ok" : "mg-insignia-falta")"
+                              role="img"
+                              aria-label="@(f.TieneRostro ? $"Rostro registrado ({f.Plantillas} plantillas)" : "Sin rostro registrado")"
+                              title="@(f.TieneRostro ? $"Rostro registrado ({f.Plantillas} plantillas)" : "Sin rostro registrado")">
+                            <RadzenIcon Icon="@(f.TieneRostro ? "face" : "no_accounts")" />
+                        </span>
+                    </div>
+                    <div class="mg-fila-texto">
+                        <div class="mg-nombre">@f.Empleado.Nombre</div>
+                        <div class="mg-detalle">
+                            @f.Detalle
+                            @if (!f.TieneRostro)
+                            {
+                                <span class="mg-detalle-sin-rostro"> · Sin rostro registrado</span>
+                            }
+                        </div>
+                    </div>
+                    <span class="mg-etiqueta mg-etiqueta-@f.Estado">@TextoEstado(f.Estado)</span>
+                </div>
+            }
+            @if (!FilasFiltradas.Any())
+            {
+                <div class="mg-vacio">No hay colaboradores en este filtro.</div>
+            }
+        </section>
+
+        <footer class="mg-pie">
+            @if (!usaReconocimiento)
+            {
+                <div class="mg-aviso-config">El reconocimiento facial está desactivado en la configuración. Actívelo para usar el registro grupal.</div>
+            }
+            <div class="mg-pie-titulo">Tipo de marca</div>
+            <div class="mg-tipos" role="radiogroup" aria-label="Tipo de marca">
+                <button class="mg-tipo mg-tipo-1 @(tipo == 1 ? "activo" : "")" role="radio" aria-checked="@(tipo == 1)" @onclick="() => tipo = 1"><RadzenIcon Icon="login" />Entrada</button>
+                <button class="mg-tipo mg-tipo-3 @(tipo == 3 ? "activo" : "")" role="radio" aria-checked="@(tipo == 3)" @onclick="() => tipo = 3"><RadzenIcon Icon="restaurant" />Descanso</button>
+                <button class="mg-tipo mg-tipo-2 @(tipo == 2 ? "activo" : "")" role="radio" aria-checked="@(tipo == 2)" @onclick="() => tipo = 2"><RadzenIcon Icon="logout" />Salida</button>
+            </div>
+            <button class="mg-btn-primario mg-iniciar" disabled="@(!usaReconocimiento)" @onclick="IniciarSesion">
+                <RadzenIcon Icon="photo_camera" /> Iniciar registro (@EsperadosTipo.Count)
+            </button>
+        </footer>
+    }
+</div>
+
+@code {
+    private MarcasDBLocal marcaDBLocal = new();
+    private bool InProcess = true;
+    private bool sincronizar;
+    private bool usaReconocimiento;
+    private bool retoVida;
+    private int tipo = ReglasMarcaGrupal.ENTRADA;
+    private EstadoColaborador? filtro;
+    private bool soloSinRostro;
+    private List<FilaColaborador> filas = new();
+    // Plantillas faciales de los empleados asignados; se cargan una vez y se pasan a la cámara
+    private List<cTemplateFACE> plantillas = new();
+    private bool plantillasCargadas;
+    private ResumenSesionGrupal? resumen;
+    private UbicacionSesion ubicacion = new(null, null, null);
+    private cPortal_Config? portalConfig;
+
+    private readonly (EstadoColaborador? Estado, string Texto)[] filtros =
+    {
+        (null, "Todos"),
+        (EstadoColaborador.Pendiente, "Pendientes"),
+        (EstadoColaborador.EnJornada, "En jornada"),
+        (EstadoColaborador.EnDescanso, "En descanso"),
+    };
+
+    private IEnumerable<FilaColaborador> FilasFiltradas =>
+        soloSinRostro ? filas.Where(f => !f.TieneRostro)
+        : filtro is null ? filas
+        : filas.Where(f => f.Estado == filtro);
+    // Sin rostro registrado la cámara no puede identificarlos, por eso no cuentan como esperados
+    private List<FilaColaborador> EsperadosTipo => filas.Where(f => f.TieneRostro && ReglasMarcaGrupal.EsEsperado(f.Estado, tipo)).ToList();
+    private int Contar(EstadoColaborador estado) => filas.Count(f => f.Estado == estado);
+    private int SinRostro => filas.Count(f => !f.TieneRostro);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            sincronizar = await geoConnect.ApiDisponible();
+            portalConfig = sincronizar ? await geoConnect.GetPortalConfig() : await marcaDBLocal.GetPortalConfigAsync();
+            usaReconocimiento = portalConfig?.USARECONOCIMIENTOFACIAL ?? false;
+            await CargarOpciones();
+            await GetData();
+            await ObtenerUbicacion();
+        }
+        catch (Exception e)
+        {
+            await swal.FireAsync("Error", $"Error al cargar el registro grupal. Detalle de error: {e.Message}", SweetAlertIcon.Error);
+        }
+        InProcess = false;
+    }
+
+    private async Task CargarOpciones()
+    {
+        if (sincronizar)
+        {
+            var opciones = await geoConnect.GetPhOpciones();
+            if (opciones is not null)
+                await marcaDBLocal.SavePhOpcionesAsync(opciones);
+        }
+        retoVida = portalConfig?.RETO_VIDA_GRUPAL ?? false;
+    }
+
+    private async Task GetData()
+    {
+        if (loginState.Empleado is null || string.IsNullOrEmpty(loginState.Empleado.IdNumero))
+        {
+            NavigationManager.NavigateTo("./");
+            return;
+        }
+
+        var empleados = await marcaDBLocal.GetEmpleadoAsync();
+        var phUsuario = loginState.PhUsuario;
+        if (phUsuario is null || string.IsNullOrEmpty(phUsuario.GRUPOS) || empleados is null)
+        {
+            filas = new();
+            return;
+        }
+
+        var grupos = phUsuario.GRUPOS.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(g => int.TryParse(g, out var id) ? id : -1).ToHashSet();
+        var asignados = empleados.Where(e => e.IdGrupo is int g && grupos.Contains(g)).ToList();
+
+        var hoy = marcaGrupalService.Ahora();
+        var marcasDelDia = new List<cMarcaIn>();
+        if (sincronizar)
+        {
+            try
+            {
+                var delServidor = await geoConnect.GetMarcaDiariaByGrupoTotal(phUsuario.GRUPOS, hoy.ToString("yyyyMMdd"));
+                marcasDelDia.AddRange((delServidor ?? new List<cMarca>())
+                    .Select(m => new cMarcaIn { idnumero = m.idnumero, tipo = m.tipo, hora = m.hora, fecha = m.fecha }));
+            }
+            catch (Exception)
+            {
+                // sin respuesta del servidor: se usan solo las marcas locales
+            }
+        }
+
+        // Las marcas guardadas en este dispositivo se suman siempre: el servidor puede tardar en reflejar
+        // una marca recien enviada y sin esto el estado del colaborador quedaria desactualizado.
+        var locales = await marcaDBLocal.GetMarcaInDelDiaAsync(hoy);
+        marcasDelDia.AddRange(locales.Where(l => !marcasDelDia.Any(m => m.idnumero == l.idnumero && m.tipo == l.tipo && m.hora == l.hora)));
+
+        if (!plantillasCargadas)
+            await CargarPlantillas(asignados);
+        var plantillasPorEmpleado = plantillas.GroupBy(p => p.IDNUMERO).ToDictionary(g => g.Key, g => g.Count());
+
+        filas = asignados
+            .Select(e =>
+            {
+                var propias = marcasDelDia.Where(m => m.idnumero == e.IdNumero).OrderBy(m => ReglasMarcaGrupal.HoraAMinutos(m.hora ?? "")).ToList();
+                var ultima = propias.LastOrDefault();
+                return new FilaColaborador
+                {
+                    Empleado = e,
+                    Estado = ReglasMarcaGrupal.CalcularEstado(propias),
+                    Detalle = ultima is null ? "Sin marcas" : $"{ReglasMarcaGrupal.NombreTipo(ultima.tipo ?? 0)} {ultima.hora}",
+                    Plantillas = plantillasPorEmpleado.GetValueOrDefault(e.IdNumero ?? "", 0),
+                };
+            })
+            .OrderBy(f => f.Empleado.Nombre)
+            .ToList();
+    }
+
+    private async Task CargarPlantillas(List<cEmpleado> asignados)
+    {
+        IEnumerable<cTemplateFACE>? todas = null;
+        if (sincronizar)
+        {
+            try
+            {
+                todas = await geoConnect.GetTemplateFACE();
+            }
+            catch (Exception)
+            {
+                todas = null;
+            }
+        }
+        todas ??= await marcaDBLocal.GetTemplateFACEAsync();
+
+        var ids = asignados.Select(e => e.IdNumero).ToHashSet();
+        plantillas = todas.Where(p => ids.Contains(p.IDNUMERO) && p.FACETEMPLATE is { Length: > 0 }).ToList();
+        plantillasCargadas = true;
+    }
+
+    private async Task ObtenerUbicacion()
+    {
+        string? ip = await geoConnect.GetPublicIpAsync();
+        if (string.IsNullOrEmpty(ip)) ip = await geoConnect.GetServerIpAsync();
+
+        string? lat = null, lng = null;
+        if (portalConfig?.USARGEOLOCALIZACION == true)
+        {
+            try
+            {
+                var status = await Permissions.CheckStatusAsync<Permissions.LocationWhenInUse>();
+                if (status != PermissionStatus.Granted)
+                    status = await Permissions.RequestAsync<Permissions.LocationWhenInUse>();
+                if (status == PermissionStatus.Granted)
+                {
+                    var loc = await Geolocation.Default.GetLocationAsync(new GeolocationRequest(GeolocationAccuracy.Best, TimeSpan.FromSeconds(10)));
+                    if (loc is not null)
+                    {
+                        lat = loc.Latitude.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                        lng = loc.Longitude.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                    }
+                }
+            }
+            catch (Exception)
+            {
+                lat = null;
+                lng = null;
+            }
+        }
+        ubicacion = new UbicacionSesion(lat, lng, ip);
+    }
+
+    private async Task IniciarSesion()
+    {
+        if (portalConfig?.USARGEOLOCALIZACION == true && portalConfig.LOCALIZACIONREQ && ubicacion.Latitud is null)
+        {
+            await swal.FireAsync("Error", "La geolocalización es requerida y no se pudo determinar la ubicación. Verifique los permisos de ubicación.", SweetAlertIcon.Error);
+            return;
+        }
+
+        var resultado = await dialogService.OpenAsync<CamaraGrupalPop>("",
+            new Dictionary<string, object>
+            {
+                { "TipoMarca", tipo },
+                { "Empleados", filas.Select(f => f.Empleado).ToList() },
+                { "Esperados", EsperadosTipo.Select(f => f.Empleado.IdNumero!).ToList() },
+                { "Ubicacion", ubicacion },
+                { "RetoVida", retoVida },
+                { "Plantillas", plantillas },
+                { "VerLog", portalConfig?.VERLOGMARCAS ?? false },
+            },
+            new DialogOptions
+            {
+                ShowTitle = false,
+                ShowClose = false,
+                CloseDialogOnEsc = false,
+                CloseDialogOnOverlayClick = false,
+                Width = "100vw",
+                Height = "100dvh",
+                Style = "max-width:100vw;max-height:100dvh;margin:0;border-radius:0;padding:0;",
+            });
+
+        if (resultado is ResumenSesionGrupal r)
+        {
+            resumen = r;
+            InProcess = true;
+            StateHasChanged();
+            await GetData();
+            InProcess = false;
+        }
+    }
+
+    private void VolverALista() => resumen = null;
+
+    private async Task OtraMarca()
+    {
+        resumen = null;
+        await IniciarSesion();
+    }
+
+    private static string Inicial(string? nombre) => string.IsNullOrEmpty(nombre) ? "?" : nombre[..1].ToUpper();
+
+    private static string TextoEstado(EstadoColaborador estado) => estado switch
+    {
+        EstadoColaborador.Pendiente => "Pendiente",
+        EstadoColaborador.EnJornada => "En jornada",
+        EstadoColaborador.EnDescanso => "En descanso",
+        _ => "Finalizado"
+    };
+}

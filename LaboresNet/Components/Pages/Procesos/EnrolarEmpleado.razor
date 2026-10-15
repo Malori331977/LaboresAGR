@@ -1,353 +1,410 @@
 ﻿@page "/enrolarempleado/{idNumero}"
 @using System.Text
-@implements IDisposable 
+@using System.Text.Json.Serialization
+@implements IAsyncDisposable
 
+@* Enrolamiento guiado: una sola sesión de cámara con captura automática por pose (face-enroll.js).
+   El flujo anterior (5 plantillas, una por una) sigue disponible en EnrolarEmpleadoAnterior.razor. *@
 
 <div class="card">
     <PageReturn Titulo="@Titulo" UrlRetorno="@UrlRetorno" />
-    <div class="card-body px-2">
+    <div class="card-body px-2 enr">
 
-        @* ── Cabecera del colaborador ─────────────────────────── *@
-        @if (empleado is not null)
+        <div class="enr-cabecera">
+            <div class="enr-nombre">@(empleado?.Nombre ?? "Colaborador") · ID @idNumero</div>
+            <div class="enr-guardadas">@existentes guardadas</div>
+        </div>
+
+        @if (cargando)
         {
-            <div style="display:flex;gap:12px;align-items:center;
-                        background:#EBF5FC;border-left:4px solid #1a76cb;
-                        border-radius:8px;padding:12px;margin-bottom:12px;">
-                <div class="emp-avatar" style="width:48px;height:48px;font-size:1.2rem;flex-shrink:0;">
-                    @(string.IsNullOrEmpty(empleado.Nombre) ? "?" : empleado.Nombre.Substring(0,1).ToUpper())
-                </div>
-                <div>
-                    <div style="font-weight:700;font-size:0.95rem;color:#212121;line-height:1.3;">@empleado.Nombre</div>
-                    <div style="font-size:0.72rem;color:#888;font-variant-numeric:tabular-nums;">@empleado.IdNumero</div>
-                </div>
+            <div class="text-center enr-cargando">
+                <RadzenProgressBar Mode="ProgressBarMode.Indeterminate" Value="100" Style="height:4px;" />
+                Preparando el enrolamiento…
             </div>
         }
-
-        <div class="ibm-plex-serif-bold">
-            <RadzenPanel AllowCollapse="false" class="panel-brand" Style="margin-bottom:0.5rem;">
-                <HeaderTemplate>
-                    <RadzenIcon Icon="face_retouching_natural" class="me-1" /> Enrolamiento de Rostros
-                </HeaderTemplate>
-                <ChildContent>
-                    @{
-                        var faces = new[] {
-                            classFace1.Contains("greeninverse"),
-                            classFace2.Contains("greeninverse"),
-                            classFace3.Contains("greeninverse"),
-                            classFace4.Contains("greeninverse"),
-                            classFace5.Contains("greeninverse")
-                        };
-                        var faceCount = faces.Count(f => f);
-                    }
-
-                    @* ── Spinner de proceso ──────────────────────────────── *@
-                    @if (InProcess)
+        else if (errorCarga is not null)
+        {
+            <div class="enr-alerta enr-alerta-error" role="alert"><RadzenIcon Icon="error_outline" />@errorCarga</div>
+        }
+        else if (total <= 0)
+        {
+            <div class="enr-alerta enr-alerta-aviso" role="status">
+                <RadzenIcon Icon="info" />El colaborador ya tiene la cantidad máxima de plantillas permitida (@maxPlantillas).
+            </div>
+        }
+        else
+        {
+            <div class="enr-video enr-estado-@estadoTipo">
+                <video id="video" autoplay muted playsinline></video>
+                @if (Completo)
+                {
+                    <div class="enr-completo">
+                        <RadzenIcon Icon="check_circle" />
+                        <div class="enr-completo-titulo">@capturadas plantillas capturadas</div>
+                        <div class="enr-completo-detalle">Variadas y de la misma persona</div>
+                    </div>
+                }
+                else
+                {
+                    <div class="enr-ovalo"></div>
+                    <div class="enr-chip"><RadzenIcon Icon="fiber_manual_record" />Auto</div>
+                    @if (progresoSostener > 0)
                     {
-                        <SpinnerControl></SpinnerControl>
+                        <div class="enr-sostener"><div style="width:@(Math.Round(progresoSostener * 100))%"></div></div>
                     }
-
-                    @* ── Instrucción + contador ──────────────────────────── *@
-                    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 4px 4px;">
-                        <span style="font-size:0.8rem;color:#555;">
-                            Capture 5 fotografías del rostro
-                        </span>
-                        <span style="font-size:0.8rem;font-weight:700;color:@(faceCount==5 ? "#1a76cb" : "#888");">
-                            @faceCount / 5
-                        </span>
+                    <div class="enr-pose">
+                        <RadzenIcon Icon="@Pose.Icono" />
+                        <div>
+                            <div class="enr-pose-num">Plantilla @(capturadas + 1) de @total</div>
+                            <div class="enr-pose-texto">@Pose.Texto</div>
+                        </div>
                     </div>
+                }
+            </div>
 
-                    @* ── Barra de progreso ───────────────────────────────── *@
-                    <div style="height:4px;background:#deeef6;border-radius:2px;margin:0 4px 12px;">
-                        <div style="height:4px;border-radius:2px;background:#1a76cb;
-                                    width:@(faceCount * 20)%;transition:width 0.3s ease-out;"></div>
-                    </div>
-
-                    @* ── Indicadores de rostros (5 círculos) ─────────────── *@
-                    <div style="display:flex;gap:8px;justify-content:center;padding-bottom:12px;">
-                        @for (int i = 0; i < 5; i++)
+            <div class="enr-puntos" aria-label="@($"{capturadas} de {total} plantillas capturadas")">
+                @for (int i = 0; i < total; i++)
+                {
+                    var hecho = i < capturadas;
+                    var actual = i == capturadas;
+                    <div class="enr-punto @(hecho ? "hecho" : actual ? "actual" : "")">
+                        @if (hecho)
                         {
-                            var isDone = faces[i];
-                            var num    = i + 1;
-                            <div style="display:flex;flex-direction:column;align-items:center;gap:3px;">
-                                <div style="width:52px;height:52px;border-radius:50%;
-                                            background:@(isDone ? "#EBF5FC" : "#fafafa");
-                                            border:2px solid @(isDone ? "#1a76cb" : "#deeef6");
-                                            display:flex;align-items:center;justify-content:center;
-                                            transition:background 0.2s,border-color 0.2s;">
-                                    <RadzenIcon Icon="@(isDone ? "check_circle" : "face")"
-                                                Style="@($"font-size:1.6rem;color:{(isDone ? "#1a76cb" : "#ccc")};")"/>
-                                </div>
-                                <span style="font-size:0.65rem;font-weight:600;color:@(isDone ? "#1a76cb" : "#bbb");">@num</span>
-                            </div>
+                            <RadzenIcon Icon="check" />
+                        }
+                        else
+                        {
+                            @(i + 1)
                         }
                     </div>
+                }
+            </div>
 
-                    @* ── Selector de cámara ──────────────────────────────── *@
-                    @if (showCameraSelector)
-                    {
-                        <div class="d-flex align-items-center gap-2 mb-3 px-1">
-                            <RadzenIcon Icon="videocam" Style="flex-shrink:0;" />
-                            <RadzenDropDown @bind-Value="selectedCameraId"
-                                            Data="@cameras"
-                                            TextProperty="Label"
-                                            ValueProperty="DeviceId"
-                                            Style="flex:1; font-size:small;"
-                                            Change="@OnCameraChanged" />
-                        </div>
-                    }
+            @if (!Completo && !string.IsNullOrEmpty(estadoMensaje))
+            {
+                <div class="enr-mensaje enr-mensaje-@estadoTipo" role="status" aria-live="polite">
+                    <RadzenIcon Icon="@IconoEstado" />@estadoMensaje
+                </div>
+            }
 
-                    @* ── Acciones ────────────────────────────────────────── *@
-                    <div style="display:flex;flex-direction:column;gap:8px;padding:0 2px 4px;">
-                        <RadzenButton Icon="face_retouching_natural"
-                                      Text="Registrar Rostro"
-                                      ButtonStyle="ButtonStyle.Primary"
-                                      Size="ButtonSize.Large"
-                                      Style="width:100%;touch-action:manipulation;"
-                                      Click="@(() => OnRegistrarRostro())" />
-                        <RadzenButton Icon="save"
-                                      Text="Guardar Rostros"
-                                      ButtonStyle="ButtonStyle.Success"
-                                      Size="ButtonSize.Large"
-                                      Disabled="@(faceCount < 5)"
-                                      Style="width:100%;touch-action:manipulation;"
-                                      Click="@(() => OnGuardarRostros())" />
-                        <RadzenButton Icon="delete_forever"
-                                      Text="Cancelar Registro"
-                                      ButtonStyle="ButtonStyle.Danger"
-                                      Variant="Variant.Outlined"
-                                      Size="ButtonSize.Large"
-                                      Style="width:100%;touch-action:manipulation;"
-                                      Click="@(() => OnLimpiarRostros())" />
-                    </div>
+            @if (parecidos.Count > 0)
+            {
+                <div class="enr-alerta enr-alerta-error" role="alert">
+                    <RadzenIcon Icon="group" />
+                    Este rostro se parece al de @(string.Join(", ", parecidos.Select(p => $"ID {p.IdNumero}"))). Verifique antes de guardar.
+                </div>
+            }
 
-                </ChildContent>
-            </RadzenPanel>
+            @if (showCameraSelector)
+            {
+                <div class="d-flex align-items-center gap-2 mt-2 px-1">
+                    <RadzenIcon Icon="videocam" Style="flex-shrink:0;" />
+                    <RadzenDropDown @bind-Value="selectedCameraId" Data="@cameras" TextProperty="Label" ValueProperty="DeviceId"
+                                    Style="flex:1; font-size:small;" Change="@OnCameraChanged" />
+                </div>
+            }
+
+            <div class="enr-acciones">
+                @if (capturadas >= minimoGuardar)
+                {
+                    <RadzenButton Icon="save" Text="@($"Guardar {capturadas} {(capturadas == 1 ? "plantilla" : "plantillas")}")"
+                                  ButtonStyle="ButtonStyle.Success" Size="Radzen.ButtonSize.Large" Disabled="@guardando"
+                                  Style="width:100%;touch-action:manipulation;" Click="@OnGuardar" />
+                }
+                @if (!Completo)
+                {
+                    <RadzenButton Icon="photo_camera" Text="Capturar plantilla manual" ButtonStyle="ButtonStyle.Light"
+                                  Size="Radzen.ButtonSize.Large" Disabled="@(!camaraLista)"
+                                  Style="width:100%;touch-action:manipulation;" Click="@OnManual" />
+                }
+                @if (capturadas > 0)
+                {
+                    <RadzenButton Icon="refresh" Text="Repetir" ButtonStyle="ButtonStyle.Light" Size="Radzen.ButtonSize.Large"
+                                  Disabled="@guardando" Style="width:100%;touch-action:manipulation;" Click="@OnRepetir" />
+                }
+                <RadzenButton Icon="close" Text="Cancelar" ButtonStyle="ButtonStyle.Danger" Variant="Variant.Outlined"
+                              Size="Radzen.ButtonSize.Large" Style="width:100%;touch-action:manipulation;"
+                              Click="@(() => NavigationManager.NavigateTo(UrlRetorno))" />
+            </div>
+
+            @if (!Completo && minimoGuardar > capturadas)
+            {
+                <div class="enr-nota">Para guardar se necesitan las @minimoGuardar plantillas.</div>
+            }
+        }
+
+        <div class="enr-anterior">
+            <a href="@($"./enrolarempleado-anterior/{idNumero}")">Usar el registro anterior, una plantilla a la vez</a>
         </div>
     </div>
 </div>
-       
-
-
-
 
 @code {
     [Parameter] public string idNumero { get; set; } = "";
 
+    private const string UrlRetorno = "./empleadoextlist";
+    private const string Titulo = "Registro de Rostros de Colaboradores";
+    private const int MaxPorDefecto = 10;
 
-    private cEmpleado empleado = new();
-    private bool InProcess = true;
+    private record PoseGuia(string Texto, string Icono);
 
-    private string UrlRetorno = "./empleadoextlist";
-    private string Titulo = "Registro de Rostros de Colaboradores";
-    bool procesoIniciado = false;
-    private string classFace1 = "mb-1  text-center h-100 bi-redinverse";
-    private string classFace2 = "mb-1  text-center h-100 bi-redinverse";
-    private string classFace3 = "mb-1  text-center h-100 bi-redinverse";
-    private string classFace4 = "mb-1  text-center h-100 bi-redinverse";
-    private string classFace5 = "mb-1  text-center h-100 bi-redinverse";
+    // Mismo orden que ENROLL_POSES en face-enroll.js. Los giros e inclinaciones se piden "hacia un lado"
+    // y luego "hacia el otro", porque la dirección que entrega cada cámara no es confiable.
+    private static readonly PoseGuia[] Poses =
+    {
+        new("De frente, expresión neutral", "face"),
+        new("De frente, con una sonrisa leve", "sentiment_satisfied"),
+        new("Gire levemente la cabeza hacia un lado", "rotate_left"),
+        new("Ahora gírela levemente hacia el otro lado", "rotate_right"),
+        new("Levante o baje un poco la barbilla", "swap_vert"),
+        new("Ahora inclínela hacia el lado contrario", "swap_vert"),
+        new("De frente, un paso más lejos de la cámara", "zoom_out"),
+        new("De frente, un poco más cerca de la cámara", "zoom_in"),
+        new("Con lentes, si los usa (si no, de frente)", "visibility"),
+        new("De frente, con otra luz (cerca de una ventana u otra lámpara)", "wb_sunny"),
+    };
 
-    // Camera selection
+    public class Parecido
+    {
+        [JsonPropertyName("idnumero")] public string IdNumero { get; set; } = "";
+        [JsonPropertyName("distancia")] public double Distancia { get; set; }
+    }
+
+    private class InicioEnrolamiento
+    {
+        [JsonPropertyName("ok")] public bool Ok { get; set; }
+        [JsonPropertyName("motivo")] public string? Motivo { get; set; }
+    }
+
     public class CameraInfo
     {
-        [System.Text.Json.Serialization.JsonPropertyName("deviceId")]
-        public string DeviceId { get; set; } = "";
-        [System.Text.Json.Serialization.JsonPropertyName("label")]
-        public string Label { get; set; } = "";
+        [JsonPropertyName("deviceId")] public string DeviceId { get; set; } = "";
+        [JsonPropertyName("label")] public string Label { get; set; } = "";
     }
+
+    private cEmpleado? empleado;
+    private bool cargando = true;
+    private string? errorCarga;
+    private int maxPlantillas;
+    private int existentes;
+    private int total;
+    private int poseInicial;
+    private int minimoGuardar;
+    private List<string> descriptoresExistentes = new();
+    private object[] otros = Array.Empty<object>();
+
+    private bool iniciado;
+    private bool camaraLista;
+    private bool guardando;
+    private int capturadas;
+    private string estadoTipo = "buscando";
+    private string estadoMensaje = "";
+    private double progresoSostener;
+    private List<Parecido> parecidos = new();
+    private DotNetObjectReference<EnrolarEmpleado>? referencia;
+
     private List<CameraInfo> cameras = new();
     private string selectedCameraId = "";
-    private bool showCameraSelector = false;
+    private bool showCameraSelector;
+
+    private bool Completo => total > 0 && capturadas >= total;
+    private PoseGuia Pose => Poses[(poseInicial + capturadas) % Poses.Length];
+
+    private string IconoEstado => estadoTipo switch
+    {
+        "sosteniendo" => "check_circle",
+        "aviso" => "warning",
+        "error" => "error_outline",
+        _ => "lightbulb"
+    };
 
     protected override async Task OnInitializedAsync()
     {
-        if (loginState.Empleado is null)
+        if (string.IsNullOrEmpty(loginState.Empleado?.IdNumero))
         {
             NavigationManager.NavigateTo("./");
+            return;
         }
 
-        if (String.IsNullOrEmpty(loginState.Empleado!.IdNumero))
+        try
         {
-            NavigationManager.NavigateTo("./");
-        }
+            empleado = await geoConnect.GetEmpleado(idNumero);
+            var portal = await geoConnect.GetPortalConfig();
+            maxPlantillas = portal?.CANTMAXPLANTILLAS > 0 ? portal.CANTMAXPLANTILLAS : MaxPorDefecto;
 
-        empleado = await geoConnect.GetEmpleado(idNumero);
-        InProcess = false;
-        StateHasChanged();
+            var todas = (await geoConnect.GetTemplateFACE()).ToList();
+            descriptoresExistentes = todas.Where(t => t.IDNUMERO == idNumero)
+                .Select(t => Encoding.ASCII.GetString(t.FACETEMPLATE)).ToList();
+            otros = todas.Where(t => t.IDNUMERO != idNumero)
+                .GroupBy(t => t.IDNUMERO)
+                .Select(g => (object)new { idnumero = g.Key, descriptores = g.Select(t => Encoding.ASCII.GetString(t.FACETEMPLATE)).ToList() })
+                .ToArray();
+
+            existentes = descriptoresExistentes.Count;
+            total = maxPlantillas - existentes;
+            poseInicial = existentes % Poses.Length;
+            // Un colaborador nuevo debe completar todas las fotos; si ya tiene, puede agregar desde una
+            minimoGuardar = existentes == 0 ? total : 1;
+        }
+        catch (Exception e)
+        {
+            errorCarga = $"No se pudo cargar la información del colaborador. Detalle: {e.Message}";
+        }
+        cargando = false;
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender)
+        // El video existe en el DOM solo después de cargar los datos
+        if (iniciado || cargando || errorCarga is not null || total <= 0) return;
+        iniciado = true;
+        await IniciarAsync();
+    }
+
+    private async Task IniciarAsync()
+    {
+        try
         {
-            var camList = await JsRuntime.InvokeAsync<List<CameraInfo>>("getCameras");
-            if (camList is not null && camList.Count > 1)
+            var permiso = await Permissions.CheckStatusAsync<Permissions.Camera>();
+            if (permiso != PermissionStatus.Granted) permiso = await Permissions.RequestAsync<Permissions.Camera>();
+            if (permiso != PermissionStatus.Granted)
             {
-                cameras = camList;
-                var savedId = await JsRuntime.InvokeAsync<string?>("loadPreferredCamera");
-                if (!string.IsNullOrEmpty(savedId) && cameras.Any(c => c.DeviceId == savedId))
-                    selectedCameraId = savedId;
-                else
-                {
-                    selectedCameraId = cameras[0].DeviceId;
-                    await JsRuntime.InvokeVoidAsync("setPreferredCamera", selectedCameraId);
-                }
-                showCameraSelector = true;
-                StateHasChanged();
+                MostrarEstado("error", "No se ha concedido el permiso para usar la cámara.");
+                return;
             }
+
+            await CargarCamarasAsync();
+
+            referencia = DotNetObjectReference.Create(this);
+            var inicio = await JsRuntime.InvokeAsync<InicioEnrolamiento>("enrollStart", referencia, new
+            {
+                total,
+                poseInicial,
+                existentes = descriptoresExistentes,
+                otros
+            });
+            camaraLista = inicio.Ok;
+            if (!inicio.Ok) MostrarEstado("error", inicio.Motivo ?? "No se pudo iniciar el enrolamiento.");
+            else MostrarEstado("buscando", "Ubique el rostro dentro del óvalo");
         }
+        catch (Exception e)
+        {
+            MostrarEstado("error", "Se presentó un error al iniciar la cámara.");
+            await swal.FireAsync("Atención", $"No se pudo iniciar el enrolamiento. Detalle de error: {e.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    private async Task CargarCamarasAsync()
+    {
+        var lista = await JsRuntime.InvokeAsync<List<CameraInfo>>("getCameras");
+        if (lista is null || lista.Count <= 1) return;
+        cameras = lista;
+        var guardada = await JsRuntime.InvokeAsync<string?>("loadPreferredCamera");
+        selectedCameraId = !string.IsNullOrEmpty(guardada) && cameras.Any(c => c.DeviceId == guardada) ? guardada : cameras[0].DeviceId;
+        await JsRuntime.InvokeVoidAsync("setPreferredCamera", selectedCameraId);
+        showCameraSelector = true;
     }
 
     private async Task OnCameraChanged(object value)
     {
         selectedCameraId = value?.ToString() ?? "";
         await JsRuntime.InvokeVoidAsync("setPreferredCamera", selectedCameraId);
+        // Reinicia solo la cámara; las fotos ya capturadas se conservan en face-enroll.js
+        await JsRuntime.InvokeVoidAsync("stopMedia");
+        await JsRuntime.InvokeAsync<int>("startCamera");
     }
 
-    private async Task OnIniciarCamara()
+    [JSInvokable]
+    public Task OnEstado(string tipo, string mensaje, double progreso)
     {
-
-    }
-    private async Task OnRegistrarRostro()
-    {
-        if (!procesoIniciado)
-        {
-            procesoIniciado = true;
-        }
-
-        await dialogService.OpenAsync<RegistrarRostroPop>("Registrando...",
-             new Dictionary<string, object>()
-               {
-                    { "OnRegistro", EventCallback.Factory.Create<bool>(this, HideModalRegistroRostro) },
-                    { "ProcesoIniciado", procesoIniciado }
-               },
-             new DialogOptions()
-             {
-                 Resizable = false,
-                 Draggable = false,
-                 Width = "310px",
-                 Height = "400px",
-             });
+        estadoTipo = tipo;
+        estadoMensaje = mensaje;
+        progresoSostener = progreso;
+        return InvokeAsync(StateHasChanged);
     }
 
-    private async Task HideModalRegistroRostro(bool registrado)
+    [JSInvokable]
+    public Task OnCaptura(int cantidad, List<Parecido> lista)
     {
-        dialogService.Close(true);
+        capturadas = cantidad;
+        parecidos = lista ?? new();
+        progresoSostener = 0;
+        estadoMensaje = "";
+        return InvokeAsync(StateHasChanged);
+    }
 
-        if (registrado)
-        {
-            var face1 = await JsRuntime.InvokeAsync<string>("idbGet", "face1");
-            var face2 = await JsRuntime.InvokeAsync<string>("idbGet", "face2");
-            var face3 = await JsRuntime.InvokeAsync<string>("idbGet", "face3");
-            var face4 = await JsRuntime.InvokeAsync<string>("idbGet", "face4");
-            var face5 = await JsRuntime.InvokeAsync<string>("idbGet", "face5");
-
-            if (!String.IsNullOrEmpty(face1)) classFace1 = "mb-1  text-center h-100 bi-greeninverse";
-            if (!String.IsNullOrEmpty(face2)) classFace2 = "mb-1  text-center h-100 bi-greeninverse";
-            if (!String.IsNullOrEmpty(face3)) classFace3 = "mb-1  text-center h-100 bi-greeninverse";
-            if (!String.IsNullOrEmpty(face4)) classFace4 = "mb-1  text-center h-100 bi-greeninverse";
-            if (!String.IsNullOrEmpty(face5)) classFace5 = "mb-1  text-center h-100 bi-greeninverse";
-        }
-
+    private void MostrarEstado(string tipo, string mensaje)
+    {
+        estadoTipo = tipo;
+        estadoMensaje = mensaje;
         StateHasChanged();
-
     }
 
+    private async Task OnManual() => await JsRuntime.InvokeVoidAsync("enrollManual");
 
-
-    private async Task OnLimpiarRostros()
+    private async Task OnRepetir()
     {
-        InProcess = true;
-        StateHasChanged();
+        await JsRuntime.InvokeVoidAsync("enrollReiniciar");
+        capturadas = 0;
+        parecidos = new();
+        progresoSostener = 0;
+        MostrarEstado("buscando", "Ubique el rostro dentro del óvalo");
+    }
+
+    private async Task OnGuardar()
+    {
+        if (guardando) return;
+        guardando = true;
         try
         {
-            await JsRuntime.InvokeVoidAsync("clearFaces");
-
-            classFace1 = "mb-1  text-center h-100 bi-redinverse";
-            classFace2 = "mb-1  text-center h-100 bi-redinverse";
-            classFace3 = "mb-1  text-center h-100 bi-redinverse";
-            classFace4 = "mb-1  text-center h-100 bi-redinverse";
-            classFace5 = "mb-1  text-center h-100 bi-redinverse";
-
-        }
-        catch (Exception e)
-        {
-            await swal.FireAsync("Atención", $"Se ha presentado un error al procesar el rostro.  Detalle de error: {(e.InnerException == null ? e.Message : e.InnerException)}", SweetAlertIcon.Error);
-        }
-
-        InProcess = false;
-        StateHasChanged();
-    }
-
-
-    private async Task OnGuardarRostros()
-    {
-        try
-        {
-            List<byte[]> listRostros = new();
-            for (int i = 1; i <= 5; i++)
+            if (parecidos.Count > 0)
             {
-                var face = await JsRuntime.InvokeAsync<string>("idbGet", $"face{i}");
-
-                if (String.IsNullOrEmpty(face))
+                var ids = string.Join(", ", parecidos.Select(p => p.IdNumero));
+                var respuestaSwal = await swal.FireAsync(new SweetAlertOptions
                 {
-                    await swal.FireAsync("Atención", "No se ha capturado la cantidad de rostros requeridos.", SweetAlertIcon.Error);
-                    InProcess = false;
-                    StateHasChanged();
-                    return;
-                }
-                byte[] bytesRostro = Encoding.ASCII.GetBytes(face!);
-                listRostros.Add(bytesRostro);
+                    Title = "Atención",
+                    Text = $"El rostro capturado se parece al de los colaboradores con ID {ids}. ¿Desea guardarlo de todos modos?",
+                    Icon = SweetAlertIcon.Warning,
+                    ShowCancelButton = true,
+                    ConfirmButtonText = "Sí, guardar",
+                    CancelButtonText = "No"
+                });
+                if (!respuestaSwal.IsConfirmed) return;
             }
 
-            if (listRostros.Count() > 0)
+            var descriptores = await JsRuntime.InvokeAsync<List<string>>("enrollDescriptores");
+            if (descriptores.Count == 0) return;
+
+            var plantillas = descriptores.Select(d => new cTemplateFACE
             {
-                await GuardarTemplates(listRostros, empleado);
+                IDNUMERO = idNumero,
+                INDEXID = 0,
+                FACETEMPLATE = Encoding.ASCII.GetBytes(d),
+            }).ToList();
+
+            EventResponse respuesta = await geoConnect.Post("TemplateFACE", plantillas);
+            if (respuesta.Id != "0")
+            {
+                await swal.FireAsync("Atención", $"Se ha presentado un error al guardar los rostros en la base de datos. Detalle de error: {respuesta.Descripcion}", SweetAlertIcon.Error);
+                return;
             }
 
+            await swal.FireAsync("Atención", $"Se guardaron {plantillas.Count} plantillas del rostro.", SweetAlertIcon.Success);
             NavigationManager.NavigateTo(UrlRetorno);
-
         }
         catch (Exception e)
         {
-            await swal.FireAsync("Atención", $"Se ha presentado un error al intentar guardar las plantillas de los Rostros.  Detalle de error: {(e.InnerException == null ? e.Message : e.InnerException)}", SweetAlertIcon.Error);
-
+            await swal.FireAsync("Atención", $"Se ha presentado un error al guardar los rostros. Detalle de error: {e.Message}", SweetAlertIcon.Error);
+        }
+        finally
+        {
+            guardando = false;
         }
     }
 
-    public async Task GuardarTemplates(List<byte[]> listRostros, cEmpleado empleado)
+    public async ValueTask DisposeAsync()
     {
-
-        List<cTemplateFACE> listTemplateFACE = new();
-        foreach (var item in listRostros)
-        {
-            cTemplateFACE empleadoFACE = new cTemplateFACE
-                {
-                    IDNUMERO = empleado.IdNumero!,
-                    INDEXID = 0,
-                    FACETEMPLATE = item,
-                };
-            listTemplateFACE.Add(empleadoFACE);
-        }
-
-        EventResponse respuesta = await geoConnect.Post("TemplateFACE", listTemplateFACE);
-
-        if (respuesta.Id != "0")
-        {
-            await swal.FireAsync("Atención", $"Se ha presentado un error al guardar los Rostros en la base de datos.  Detalle de error: {respuesta.Descripcion}", SweetAlertIcon.Error);
-            return;
-        }
-        await OnLimpiarRostros();
-    }
-
-    public void Dispose()
-    {
-        Task task = new Task(async () =>
-        {
-            await JsRuntime.InvokeVoidAsync("stopMedia");
-        });
-
-        task.Start();
-
+        try { await JsRuntime.InvokeVoidAsync("enrollStop"); } catch { }
+        referencia?.Dispose();
     }
 }
-

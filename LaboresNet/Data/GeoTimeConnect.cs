@@ -357,9 +357,31 @@ namespace PortalEmpleadoGeotime.Client.Data
                 var contentType = new MediaTypeWithQualityHeaderValue("application/json");
                 client.DefaultRequestHeaders.Accept.Add(contentType);
 
-                var responseTask = await client.DeleteAsync(apiName);
+                var response = await client.DeleteAsync(apiName);
+                var cuerpo = await response.Content.ReadAsStringAsync();
 
-                respuesta = await responseTask.Content.ReadFromJsonAsync<EventResponse>();
+                // Si el servidor (o un proxy delante de la API, p. ej. IIS/WebDAV o Cloudflare) responde algo que
+                // no es el JSON de EventResponse, se devuelve el estado HTTP en lugar de fallar al deserializar.
+                respuesta = null;
+                try
+                {
+                    respuesta = JsonSerializer.Deserialize<EventResponse>(cuerpo, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+                }
+                catch (JsonException)
+                {
+                }
+
+                if (respuesta is null)
+                {
+                    var resumen = string.Join(" ", cuerpo.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+                    if (resumen.Length > 300) resumen = resumen[..300] + "...";
+                    _logger.LogError($"GeoTimeConnect.Delete: respuesta no valida. {(int)response.StatusCode} {response.ReasonPhrase} en DELETE {apiName}. Cuerpo: {resumen}");
+                    respuesta = new EventResponse
+                    {
+                        Id = "-1",
+                        Descripcion = $"HTTP {(int)response.StatusCode} {response.ReasonPhrase} en DELETE /{apiName.Substring(appSettings.ApiGeoTimeUrl.Length).TrimStart('/')}. Respuesta: {(string.IsNullOrEmpty(resumen) ? "(vacía)" : resumen)}"
+                    };
+                }
 
             }
             catch (Exception e)
@@ -385,6 +407,55 @@ namespace PortalEmpleadoGeotime.Client.Data
             }
         }
 
+
+        /// <summary>GetPhOpciones: opciones generales del sistema (ph_opciones).</summary>
+        public async Task<cPh_Opciones?> GetPhOpciones()
+        {
+            try
+            {
+                var result = await Get("/PhOpciones");
+                if (result.IsSuccessStatusCode)
+                    return await result.Content.ReadFromJsonAsync<cPh_Opciones>();
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e);
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// PostMarcaGrupal: registra una marca de la sesion grupal automatica. Lanza excepcion ante fallas
+        /// tecnicas (sin conexion, tiempo agotado, HTTP != 2xx) para que el llamador aplique las reglas locales.
+        /// </summary>
+        public async Task<cMarcaGrupalResultado> PostMarcaGrupal(cMarcaGrupalRequest request)
+        {
+            cParametroApiLocal appSettings = await GetUrlApi();
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
+
+            string token;
+            try
+            {
+                token = await getToken().WaitAsync(cts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                throw new TimeoutException("PostMarcaGrupal: tiempo agotado obteniendo el token");
+            }
+            if (string.IsNullOrEmpty(token))
+                throw new HttpRequestException("PostMarcaGrupal: no se pudo obtener el token");
+
+            using var client = new HttpClient();
+            ConfigurarUserAgent(client);
+            client.BaseAddress = new Uri(appSettings.ApiGeoTimeUrl);
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+            var response = await client.PostAsJsonAsync(appSettings.ApiGeoTimeUrl + "/MarcaGrupal", request, cts.Token);
+            if (!response.IsSuccessStatusCode)
+                throw new HttpRequestException($"MarcaGrupal respondió {(int)response.StatusCode}");
+
+            return (await response.Content.ReadFromJsonAsync<cMarcaGrupalResultado>(cancellationToken: cts.Token))!;
+        }
 
         /// <summary>
         /// Get: Método para obtener una lista de registros de cualquier objeto de la base de datos a traves del método Get

@@ -88,6 +88,8 @@
                     {
                         await JsRuntime.InvokeAsync<bool>("idbSet", "distancia", portal_Config.FACEDIST);
                         await JsRuntime.InvokeAsync<bool>("idbSet", "textura", portal_Config.FACETEXT);
+                        // Precarga de modelos en segundo plano para que la primera marca no espere
+                        await JsRuntime.InvokeAsync<bool>("warmupFaceModels");
                     }
                 }
                 

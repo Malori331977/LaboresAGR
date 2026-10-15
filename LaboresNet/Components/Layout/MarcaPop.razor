@@ -4,28 +4,39 @@
 @using Microsoft.Maui.ApplicationModel;
 @using PortalEmpleadoGeotime.Client.Data.DataBaseLocal
 
-<div class="camera-selector-container" style="margin-bottom: 1rem; padding: 0.5rem;">
-    @if (Cameras is not null && Cameras.Count > 0)
+<div class="face-panel">
+    <div class="container-canvas">
+        <video id="video" autoplay muted playsinline></video>
+        <canvas id="overlay"></canvas>
+        <div class="face-chip face-chip-@EstadoCss" role="status" aria-live="polite">
+            <RadzenIcon Icon="@EstadoIcono" />
+            <span>@EstadoTitulo</span>
+        </div>
+    </div>
+
+    <div class="face-msg face-msg-@EstadoCss">
+        <RadzenIcon Icon="@(Estado == EstadoCamara.Error ? "error_outline" : "lightbulb")" />
+        <span>@EstadoMensaje</span>
+    </div>
+
+    @if (Cameras is not null && Cameras.Count > 1)
     {
-        <RadzenStack Orientation="Radzen.Orientation.Horizontal" JustifyContent="JustifyContent.SpaceBetween" AlignItems="Radzen.AlignItems.Center" Gap="0.5rem">
-            <RadzenText TextStyle="TextStyle.Caption">Seleccionar Cámara:</RadzenText>
-            <RadzenDropDown @bind-Value="SelectedCameraId" 
-                           Data="@Cameras" 
-                           TextProperty="Label" 
-                           ValueProperty="DeviceId"
-                           Change="@OnCameraChanged"
-                           style="width: 200px;">
-            </RadzenDropDown>
-        </RadzenStack>
+        <div class="face-camera-select">
+            <RadzenIcon Icon="photo_camera" />
+            <RadzenDropDown @bind-Value="SelectedCameraId"
+                            Data="@Cameras"
+                            TextProperty="Label"
+                            ValueProperty="DeviceId"
+                            Change="@OnCameraChanged"
+                            Style="flex: 1; min-width: 0;" />
+        </div>
+    }
+
+    @if (Estado == EstadoCamara.Error)
+    {
+        <RadzenButton Text="Reintentar" Icon="refresh" Click="@Reintentar" Style="width: 100%; margin-top: 0.75rem; background: #017F01;" />
     }
 </div>
-
-<RadzenStack Orientation="Radzen.Orientation.Horizontal" JustifyContent="JustifyContent.Center" AlignItems="Radzen.AlignItems.Center" Gap="1rem">
-    <div class="container-canvas">
-        <video id="video" autoplay muted></video>
-        <canvas id="overlay"></canvas>
-    </div>
-</RadzenStack>
 @* <div class="row">
 
     <div class="col ml-10">
@@ -35,20 +46,42 @@
         </div>
     </div>
 </div> *@
-@if (InProcessRec)
-{
-    <div class="text-center">
-        <SpinnerControl></SpinnerControl> <br />Procesando Rostro
-    </div>
-}
-
-
 @code {
 
     [Parameter] public EventCallback<int> OnReconocimiento { get; set; }
     [Parameter] public string? EmpleadoId { get; set; } = null;
 
-    private bool InProcessRec = false;
+    private enum EstadoCamara { Iniciando, Buscando, Comparando, Error }
+
+    private EstadoCamara Estado = EstadoCamara.Iniciando;
+    private string? ErrorMensaje;
+
+    private string EstadoCss => Estado.ToString().ToLowerInvariant();
+
+    private string EstadoIcono => Estado switch
+    {
+        EstadoCamara.Iniciando => "hourglass_top",
+        EstadoCamara.Buscando => "face",
+        EstadoCamara.Comparando => "sync",
+        _ => "videocam_off"
+    };
+
+    private string EstadoTitulo => Estado switch
+    {
+        EstadoCamara.Iniciando => "Iniciando cámara…",
+        EstadoCamara.Buscando => "Centra tu rostro en el óvalo",
+        EstadoCamara.Comparando => "Procesando rostro…",
+        _ => "Cámara no disponible"
+    };
+
+    private string EstadoMensaje => Estado switch
+    {
+        EstadoCamara.Iniciando => "Un momento, estamos preparando la cámara.",
+        EstadoCamara.Buscando => "Busca buena iluminación y quítate gorra o lentes oscuros.",
+        EstadoCamara.Comparando => "Mantente quieto un momento.",
+        _ => ErrorMensaje ?? "No se pudo iniciar la cámara."
+    };
+
     private bool CamaraEncendida = false;
     private List<string> descriptores = new();
     private List<CameraDevice> Cameras = new();
@@ -69,37 +102,68 @@
     {
         if (firstRender)
         {
-            try
-            {
-                // Cargar lista de cámaras disponibles
-                await LoadAvailableCameras();
-                await OnIniciarCamara();
-                await OnVerificarRostroColaborador();
-            }
-            catch (Exception e)
-            {
-                await swal.FireAsync("Atención", $"Se ha presentado un error al iniciar la cámara. Detalle de error: {(e.InnerException == null ? e.Message : e.InnerException)}", SweetAlertIcon.Error);
-            }
+            await IniciarFlujoAsync(cargarCamaras: true);
         }
+    }
+
+    private async Task IniciarFlujoAsync(bool cargarCamaras)
+    {
+        try
+        {
+            Estado = EstadoCamara.Iniciando;
+            ErrorMensaje = null;
+            StateHasChanged();
+
+            // Cargar lista de cámaras disponibles
+            if (cargarCamaras)
+                await LoadAvailableCameras();
+
+            await OnIniciarCamara();
+
+            if (!CamaraEncendida)
+            {
+                Estado = EstadoCamara.Error;
+                ErrorMensaje ??= "No se pudo iniciar la cámara. Revisa los permisos de la aplicación e inténtalo de nuevo.";
+                StateHasChanged();
+                return;
+            }
+
+            // Sin permiso previo enumerateDevices no devuelve deviceId; recargar ya con la cámara activa
+            if (cargarCamaras && Cameras.Count < 2)
+                await LoadAvailableCameras();
+
+            await OnVerificarRostroColaborador();
+        }
+        catch (Exception e)
+        {
+            Estado = EstadoCamara.Error;
+            ErrorMensaje = "Se presentó un error al iniciar la cámara.";
+            StateHasChanged();
+            await swal.FireAsync("Atención", $"Se ha presentado un error al iniciar la cámara. Detalle de error: {(e.InnerException == null ? e.Message : e.InnerException)}", SweetAlertIcon.Error);
+        }
+    }
+
+    private async Task Reintentar()
+    {
+        await OnApagarCamara();
+        await IniciarFlujoAsync(cargarCamaras: false);
     }
 
     private async Task LoadAvailableCameras()
     {
         try
         {
-            var camerasJson = await JsRuntime.InvokeAsync<string>("getCameras");
-            if (!string.IsNullOrEmpty(camerasJson))
+            // getCameras devuelve un arreglo de objetos {deviceId, label}, no un string JSON
+            var cameraList = await JsRuntime.InvokeAsync<List<CameraDevice>>("getCameras");
+            cameraList = cameraList?.Where(c => !string.IsNullOrEmpty(c.DeviceId)).ToList();
+            if (cameraList is not null && cameraList.Count > 0)
             {
-                var cameraList = System.Text.Json.JsonSerializer.Deserialize<List<CameraDevice>>(camerasJson);
-                if (cameraList is not null)
-                {
-                    Cameras = cameraList;
-                    if (Cameras.Count > 0)
-                    {
-                        SelectedCameraId = Cameras[0].DeviceId;
-                    }
-                    StateHasChanged();
-                }
+                Cameras = cameraList;
+                var savedId = await JsRuntime.InvokeAsync<string?>("loadPreferredCamera");
+                SelectedCameraId = !string.IsNullOrEmpty(savedId) && Cameras.Any(c => c.DeviceId == savedId)
+                    ? savedId
+                    : Cameras[0].DeviceId;
+                StateHasChanged();
             }
         }
         catch (Exception ex)
@@ -130,16 +194,18 @@
 
     private async Task OnVerificarRostroColaborador()
     {
-        InProcessRec = true;
+        Estado = EstadoCamara.Buscando;
         StateHasChanged();
         int caraReconocida = 0;
         try
         {
-            List<string> colaboradorReconocido = new List<string>();
             var caraDetectada = await JsRuntime.InvokeAsync<int>("verifyFace");
 
             if (caraDetectada == 1)
             {
+                Estado = EstadoCamara.Comparando;
+                StateHasChanged();
+
                 IEnumerable<cTemplateFACE> colaboradorFaces = new List<cTemplateFACE>();
                 bool sincronizar = await geoConnect.ApiDisponible();
 
@@ -163,28 +229,10 @@
 
                     if (descriptores.Count() > 0)
                     {
-                        foreach (var descriptor in descriptores)
-                        {
-                            await JsRuntime.InvokeAsync<bool>("idbSet", "idnum", EmpleadoId!);
-                            await JsRuntime.InvokeAsync<bool>("idbSet", "faceVerify", descriptor);
-                            caraReconocida = await JsRuntime.InvokeAsync<int>("compareFace");
+                        // Una sola llamada JS compara contra todas las plantillas
+                        caraReconocida = await JsRuntime.InvokeAsync<int>("compareFaceMulti", descriptores, EmpleadoId!);
 
-                            if (caraReconocida == 1)
-                            {
-                                colaboradorReconocido.Add(descriptor);
-                                if (colaboradorReconocido.Count() > 2)
-                                {
-                                    break;
-                                }
-                            }
-                            
-                        }
-
-                        if (colaboradorReconocido.Count() > 2)
-                            await HideModalRostro(1);
-                        else
-							await HideModalRostro(0);
-
+                        await HideModalRostro(caraReconocida == 1 ? 1 : 0);
                     }
                     else
                     {
@@ -207,7 +255,6 @@
         {
             await swal.FireAsync("Atención", $"Se ha presentado un error al procesar el rostro.  Detalle de error: {(e.InnerException == null ? e.Message : e.InnerException)}", SweetAlertIcon.Error);
         }
-        InProcessRec = false;
         StateHasChanged();
     }
 
@@ -230,6 +277,8 @@
 
         if (camStatus != PermissionStatus.Granted || micStatus != PermissionStatus.Granted)
         {
+            ErrorMensaje = "No se concedió el permiso de cámara. Actívalo en Ajustes > Apps > Sistema de Labores > Permisos y reintenta.";
+            CamaraEncendida = false;
             await swal.FireAsync("Atención", $"No se ha concedido el permiso a esta aplicación para el uso de la cámara.", SweetAlertIcon.Error);
             return;
         }

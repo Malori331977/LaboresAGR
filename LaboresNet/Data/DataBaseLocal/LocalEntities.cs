@@ -91,6 +91,11 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
         public string? gps_cell { get; set; }
         public string? host { get; set; }
         public string? dir_ip { get; set; }
+
+        // Marcas grupal automatica
+        public string? IDSUPERVISOR { get; set; }
+        public bool ES_GRUPAL { get; set; }
+        public string? MOTIVO_RECHAZO { get; set; }
     }
 
     [Table("ParametroSinc")]
@@ -204,6 +209,7 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
         public bool LOCALIZACIONREQ { get; set; }
         public bool AUTOREGISTROROSTRO { get; set; }
         public bool VERLOGMARCAS { get; set; }
+        public bool RETO_VIDA_GRUPAL { get; set; }
         public string? MAPAPIKEY { get; set; }
         public decimal FACEDIST { get; set; }
         public decimal FACETEXT { get; set; }
@@ -312,6 +318,16 @@ namespace PortalEmpleadoGeotime.Client.Data.DataBaseLocal
         public string IDNUMERO { get; set; }
         public int INDEXID { get; set; }
         public byte[] FACETEMPLATE { get; set; }
+    }
+
+    [Table("cPh_Opciones")]
+    public class cPh_OpcionesLocal
+    {
+        [PrimaryKey]
+        public int IDOPCION { get; set; }
+        public int NUM_ALM { get; set; }
+        public string? UTILIZA_DESC { get; set; }
+        public int MIN_PUSHBACK { get; set; }
     }
 
     [Table("ParametroApi")]

@@ -2,6 +2,7 @@
 
 @layout MainLayout
 @using PortalEmpleadoGeotime.Client.Data.DataBaseLocal
+@inject IMarcaGrupalService marcaGrupalService
 
 <div class="card">
     <PageReturn Titulo="@Titulo" UrlRetorno="@UrlRetorno" />
@@ -55,6 +56,24 @@
                                           Size="ButtonSize.Large"
                                           Style="width:100%;touch-action:manipulation;" />
                         </EditForm>
+
+                        @if (rechazadas.Count > 0)
+                        {
+                            <RadzenPanel AllowCollapse="true" class="panel-brand" Style="margin-top:0.75rem;">
+                                <HeaderTemplate>
+                                    <RadzenIcon Icon="report" class="me-1" /> Marcas grupales rechazadas (@rechazadas.Count)
+                                </HeaderTemplate>
+                                <ChildContent>
+                                    @foreach (var r in rechazadas)
+                                    {
+                                        <div style="padding:8px 0;border-bottom:1px solid #e0e0e0;">
+                                            <div style="font-weight:500;">@r.idnumero · @ReglasMarcaGrupal.NombreTipo(r.tipo ?? 0) · @r.fecha?.ToString("dd/MM/yyyy") @r.hora</div>
+                                            <div style="font-size:0.85rem;color:#666;">@r.MOTIVO_RECHAZO</div>
+                                        </div>
+                                    }
+                                </ChildContent>
+                            </RadzenPanel>
+                        }
                     }
 
                 </ChildContent>
@@ -72,9 +91,11 @@
 
 	private MarcasDBLocal dbLocal = new();
 	ParametroSinc parametro = new();
+	private List<cMarcaInLocal> rechazadas = new();
 
 	protected override async void OnInitialized()
 	{
+		rechazadas = await dbLocal.GetMarcaGrupalRechazadaAsync();
 
 		parametro = await dbLocal.GetParametroAsync(1);
 
@@ -192,6 +213,11 @@
 			if (listMarcas.Count()>0)
 				await marcaDBLocal.SaveMarcaInAsync(listMarcas);
 			await marcaDBLocal.SaveTemplateFACEAsync(templatesFACES);
+
+			// Opciones generales (descansos, tiempo minimo entre marcas) para las reglas locales de marcas grupal automatica
+			var phOpciones = await geoConnect.GetPhOpciones();
+			if (phOpciones is not null)
+				await marcaDBLocal.SavePhOpcionesAsync(phOpciones);
 
 			// Catálogos de labores desde Geotime (todo o nada)
 			if (!await PortalEmpleadoGeotime.Client.Data.LaboresCatalogoSync.SincronizarAsync(geoConnect, marcaDBLocal))
@@ -317,6 +343,12 @@
 					}
 				}
 			}
+
+			// Marcas grupal automatica pendientes: se envian a /MarcaGrupal y se revalidan en el servidor
+			var (grupalesEnviadas, grupalesRechazadas) = await marcaGrupalService.SincronizarPendientes();
+			if (grupalesRechazadas > 0)
+				await swal.FireAsync("Atención", $"{grupalesRechazadas} marca(s) grupal(es) fueron rechazadas por el servidor. Revise el detalle en esta pantalla.", SweetAlertIcon.Warning);
+			rechazadas = await marcaDBLocal.GetMarcaGrupalRechazadaAsync();
 
 			if (marcasDistribucionPendientes.Count() > 0)
 			{

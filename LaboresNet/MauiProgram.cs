@@ -32,6 +32,7 @@ namespace LaboresNet
                 .AddScoped<IGridExtensions, PortalEmpleadoGeotime.Client.Data.GridExtensions>()
                 .AddScoped<IEncriptaService, EncriptaService>()
                 .AddScoped<LoginState>()
+                .AddScoped<IMarcaGrupalService, MarcaGrupalService>()
                 .AddScoped<PeriodicExecutor>();
 
             builder.Services.AddSingleton<NavigationService>();

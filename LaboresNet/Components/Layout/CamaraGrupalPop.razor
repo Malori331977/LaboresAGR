@@ -1,0 +1,433 @@
+﻿@using System.Text
+@using PortalEmpleadoGeotime.Client.Data.DataBaseLocal
+@implements IAsyncDisposable
+@inject IMarcaGrupalService marcaGrupalService
+
+<div class="cg">
+    <header class="cg-head">
+        <span class="cg-tipo cg-tipo-@TipoMarca"><RadzenIcon Icon="@IconoTipo" /> @ReglasMarcaGrupal.NombreTipo(TipoMarca)</span>
+        <span class="cg-progreso">@Registrados.Count de @Esperados.Count</span>
+    </header>
+    <div class="cg-barra" role="progressbar" aria-valuemin="0" aria-valuemax="@Esperados.Count" aria-valuenow="@Registrados.Count">
+        <div class="cg-barra-valor" style="width:@PorcentajeCss"></div>
+    </div>
+
+    @if (showCameraSelector)
+    {
+        <div class="cg-camara">
+            <RadzenIcon Icon="videocam" />
+            <RadzenDropDown @bind-Value="selectedCameraId" Data="@cameras" TextProperty="Label" ValueProperty="DeviceId"
+                            Style="flex:1; font-size:small;" Disabled="@cambiandoCamara" Change="@OnCameraChanged" />
+        </div>
+    }
+
+    <div class="cg-video">
+        <video id="video" autoplay muted playsinline></video>
+        <canvas id="overlayGrupo"></canvas>
+    </div>
+
+    <div class="cg-franja cg-franja-@franjaTipo" role="status" aria-live="polite">
+        @if (franjaTipo == "ok" && ultimoRegistro is not null)
+        {
+            @if (ultimoRegistro.Empleado.foto is { Length: > 0 } foto)
+            {
+                <img class="cg-foto" src="data:image/jpeg;base64,@Convert.ToBase64String(foto)" alt="Foto registrada de @ultimoRegistro.Empleado.Nombre" />
+            }
+            else
+            {
+                <div class="cg-foto cg-iniciales">@Iniciales(ultimoRegistro.Empleado.Nombre)</div>
+            }
+            <div class="cg-franja-texto">
+                <div class="cg-nombre">@ultimoRegistro.Empleado.Nombre</div>
+                <div><RadzenIcon Icon="check_circle" /> @ultimoRegistro.Mensaje</div>
+                @if (!string.IsNullOrEmpty(ultimoRegistro.Advertencia))
+                {
+                    <div class="cg-advertencia"><RadzenIcon Icon="warning" /> @ultimoRegistro.Advertencia</div>
+                }
+            </div>
+        }
+        else
+        {
+            <RadzenIcon Icon="@franjaIcono" />
+            <span class="cg-franja-texto">@franjaTexto</span>
+        }
+    </div>
+
+    @if (sinConexion)
+    {
+        <div class="cg-offline"><RadzenIcon Icon="cloud_off" /> Modo sin conexión: las marcas se enviarán al sincronizar@(string.IsNullOrEmpty(errorConexion) ? "" : $" ({errorConexion})")</div>
+    }
+
+    <div class="cg-historial">
+        <div class="cg-historial-titulo">Últimos registros</div>
+        @foreach (var r in Registrados.Take(3))
+        {
+            <div class="cg-historial-fila"><span><RadzenIcon Icon="check_circle" /> @r.Empleado.Nombre</span><span>@r.Hora</span></div>
+        }
+    </div>
+
+    <div class="cg-acciones">
+        @if (VerLog)
+        {
+            <button class="cg-ver-log" aria-label="Ver log de reconocimiento" @onclick="VerFaceLogs"><RadzenIcon Icon="receipt_long" /></button>
+        }
+        <button class="cg-finalizar" @onclick="Finalizar"><RadzenIcon Icon="stop_circle" /> Finalizar registro</button>
+    </div>
+</div>
+
+@code {
+    [Parameter] public int TipoMarca { get; set; }
+    [Parameter] public List<cEmpleado> Empleados { get; set; } = new();
+    [Parameter] public List<string> Esperados { get; set; } = new();
+    [Parameter] public UbicacionSesion Ubicacion { get; set; } = new(null, null, null);
+    [Parameter] public bool RetoVida { get; set; }
+    /// <summary>Plantillas ya cargadas por la página; si es null se descargan aquí.</summary>
+    [Parameter] public List<cTemplateFACE>? Plantillas { get; set; }
+    /// <summary>Muestra el botón "Ver log" (portal_config.VERLOGMARCAS).</summary>
+    [Parameter] public bool VerLog { get; set; }
+
+    private MarcasDBLocal marcaDBLocal = new();
+
+    private const string ColorBuscando = "#2192FF";
+    private const string ColorOk = "#22C55E";
+    private const string ColorError = "#EF4444";
+    private const string ColorNeutro = "#94A3B8";
+    private const string ColorAviso = "#F59E0B";
+
+    private readonly List<RegistroSesion> historial = new();
+    private readonly Dictionary<string, DateTime> ignorados = new();
+    private readonly HashSet<string> registradosSesion = new();
+    private readonly DateTime inicio = DateTime.Now;
+    private CancellationTokenSource? cts;
+    private Task? ciclo;
+    private Microsoft.Maui.Controls.Window? ventana;
+    private RegistroSesion? ultimoRegistro;
+    private string franjaTipo = "info";
+    private string franjaIcono = "hourglass_empty";
+    private string franjaTexto = "Preparando la cámara…";
+    private bool sinConexion;
+    private string? errorConexion;
+    private bool finalizado;
+
+    // Seleccion de camara (misma preferencia persistente que el resto de pantallas de marcas)
+    public class CameraInfo
+    {
+        [System.Text.Json.Serialization.JsonPropertyName("deviceId")]
+        public string DeviceId { get; set; } = "";
+        [System.Text.Json.Serialization.JsonPropertyName("label")]
+        public string Label { get; set; } = "";
+    }
+    private List<CameraInfo> cameras = new();
+    private string selectedCameraId = "";
+    private bool showCameraSelector;
+    private bool cambiandoCamara;
+
+    private List<RegistroSesion> Registrados => historial.Where(h => h.EsOk).ToList();
+
+    private string PorcentajeCss =>
+        (Esperados.Count == 0 ? 0 : Math.Min(100, Registrados.Count * 100 / Esperados.Count)).ToString(System.Globalization.CultureInfo.InvariantCulture) + "%";
+
+    private string IconoTipo => TipoMarca switch { 1 => "login", 2 => "logout", _ => "restaurant" };
+
+    protected override void OnInitialized()
+    {
+        ventana = Microsoft.Maui.Controls.Application.Current?.Windows.FirstOrDefault();
+        if (ventana is not null) ventana.Stopped += AlPasarASegundoPlano;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try
+        {
+            if (await CargarPlantillas() == 0)
+            {
+                MostrarFranja("error", "error", "Ningún colaborador asignado tiene rostro registrado.");
+                await Task.Delay(2500);
+                await Finalizar();
+                return;
+            }
+            if (!await IniciarCamara())
+            {
+                MostrarFranja("error", "no_photography", "No se pudo iniciar la cámara.");
+                await Task.Delay(2500);
+                await Finalizar();
+                return;
+            }
+            await CargarCamarasAsync();
+            cts = new CancellationTokenSource();
+            ciclo = CicloAsync(cts.Token);
+        }
+        catch (Exception e)
+        {
+            await swal.FireAsync("Error", $"No se pudo iniciar el registro grupal. Detalle de error: {e.Message}", SweetAlertIcon.Error);
+            await Finalizar();
+        }
+    }
+
+    private async Task<int> CargarPlantillas()
+    {
+        IEnumerable<cTemplateFACE>? plantillas = Plantillas;
+        if (plantillas is null)
+        {
+            try
+            {
+                if (await geoConnect.ApiDisponible())
+                    plantillas = await geoConnect.GetTemplateFACE();
+            }
+            catch (Exception)
+            {
+                plantillas = null;
+            }
+            plantillas ??= await marcaDBLocal.GetTemplateFACEAsync();
+        }
+
+        var asignados = Empleados.Select(e => e.IdNumero).ToHashSet();
+        var items = plantillas
+            .Where(p => asignados.Contains(p.IDNUMERO))
+            .GroupBy(p => p.IDNUMERO)
+            .Select(g => new { idnumero = g.Key, descriptores = g.Select(p => Encoding.ASCII.GetString(p.FACETEMPLATE)).ToList() })
+            .ToList();
+        return await JsRuntime.InvokeAsync<int>("loadGroupDescriptors", items);
+    }
+
+    private async Task<bool> IniciarCamara()
+    {
+        var camStatus = await Permissions.CheckStatusAsync<Permissions.Camera>();
+        if (camStatus != PermissionStatus.Granted)
+            camStatus = await Permissions.RequestAsync<Permissions.Camera>();
+        if (camStatus != PermissionStatus.Granted)
+        {
+            await swal.FireAsync("Atención", "No se ha concedido el permiso a esta aplicación para el uso de la cámara.", SweetAlertIcon.Error);
+            return false;
+        }
+        return await JsRuntime.InvokeAsync<int>("startMedia") == 1;
+    }
+
+    private async Task CicloAsync(CancellationToken ct)
+    {
+        MostrarFranja("info", "face", "Acérquese a la cámara");
+        while (!ct.IsCancellationRequested)
+        {
+            try
+            {
+                var id = await JsRuntime.InvokeAsync<IdentificacionRostro>("identifyFace", ct);
+                if (id.SinRostro)
+                {
+                    MostrarFranja("info", "face", "Acérquese a la cámara");
+                    await Task.Delay(250, ct);
+                    continue;
+                }
+                if (id.IdNumero is null)
+                {
+                    await MostrarResultado("neutro", "help", "No reconocido, acérquese", ColorNeutro, ct);
+                    continue;
+                }
+                if (ignorados.TryGetValue(id.IdNumero, out var hasta) && hasta > DateTime.Now)
+                {
+                    await Task.Delay(250, ct);
+                    continue;
+                }
+
+                var empleado = Empleados.First(e => e.IdNumero == id.IdNumero);
+
+                if (registradosSesion.Contains(id.IdNumero))
+                {
+                    await MostrarResultado("aviso", "warning", $"{empleado.Nombre}: ya registrado en esta sesión", ColorAviso, ct);
+                    continue;
+                }
+
+                var reto = RetoVida ? "giro" : "parpadeo";
+                MostrarFranja("info", "visibility", reto == "parpadeo" ? "Parpadee una vez" : "Parpadee y gire la cabeza a un lado");
+
+                var vida = await JsRuntime.InvokeAsync<PruebaVida>("checkLiveness", ct, id.IdNumero, reto);
+                if (!vida.Ok)
+                {
+                    await MostrarResultado("neutro", "visibility_off", TextoFallaVida(vida.Motivo), ColorNeutro, ct);
+                    continue;
+                }
+
+                MostrarFranja("info", "hourglass_empty", "Procesando…");
+                var foto = string.IsNullOrEmpty(vida.Foto) ? null : Convert.FromBase64String(vida.Foto);
+                var resultado = await marcaGrupalService.Registrar(empleado, TipoMarca, Ubicacion, foto);
+                sinConexion = resultado.ModoSinConexion;
+                errorConexion = sinConexion ? marcaGrupalService.UltimoError : null;
+
+                var registro = new RegistroSesion(empleado, resultado.Codigo, resultado.Mensaje, resultado.Advertencia, marcaGrupalService.Ahora().ToString("HH:mm"));
+                historial.Insert(0, registro);
+                await JsRuntime.InvokeVoidAsync("logGrupo", ct,
+                    $"Resultado {id.IdNumero} ({empleado.Nombre}) {ReglasMarcaGrupal.NombreTipo(TipoMarca)}: {resultado.Codigo}" +
+                    (resultado.ModoSinConexion ? $" [sin conexión: {marcaGrupalService.UltimoError ?? "causa no registrada"}]" : "") +
+                    $" - {resultado.Mensaje}" +
+                    (string.IsNullOrEmpty(resultado.Advertencia) ? "" : $" - {resultado.Advertencia}"));
+
+                if (resultado.EsOk)
+                {
+                    registradosSesion.Add(id.IdNumero);
+                    ultimoRegistro = registro;
+                    await MostrarResultado("ok", "check_circle", resultado.Mensaje, ColorOk, ct);
+                }
+                else
+                {
+                    ignorados[id.IdNumero] = DateTime.Now.AddSeconds(5);
+                    if (resultado.Codigo == CodigoMarcaGrupal.DUPLICADA)
+                        await MostrarResultado("aviso", "warning", $"{empleado.Nombre}: {resultado.Mensaje}", ColorAviso, ct);
+                    else
+                        await MostrarResultado("error", "error", $"{empleado.Nombre}: {resultado.Mensaje}", ColorError, ct);
+                }
+            }
+            catch (OperationCanceledException) { break; }
+            catch (JSDisconnectedException) { break; }
+            catch (Exception e)
+            {
+                MostrarFranja("error", "error", $"Error: {e.Message}");
+                try { await Task.Delay(1500, ct); } catch (OperationCanceledException) { break; }
+            }
+        }
+    }
+
+    private static string TextoFallaVida(string? motivo) => motivo switch
+    {
+        "sin_giro" => "No se detectó el giro, intente de nuevo",
+        "cambio_persona" => "Se detectó otra persona, intente de nuevo",
+        "sin_plantilla" => "El colaborador no tiene rostro registrado",
+        _ => "No se detectó parpadeo, intente de nuevo"
+    };
+
+    private void MostrarFranja(string tipo, string icono, string texto)
+    {
+        franjaTipo = tipo;
+        franjaIcono = icono;
+        franjaTexto = texto;
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private async Task MostrarResultado(string tipo, string icono, string texto, string color, CancellationToken ct)
+    {
+        await JsRuntime.InvokeVoidAsync("setGroupBoxColor", ct, color);
+        MostrarFranja(tipo, icono, texto);
+        await Task.Delay(2000, ct);
+        ultimoRegistro = null;
+        await JsRuntime.InvokeVoidAsync("setGroupBoxColor", ct, ColorBuscando);
+        MostrarFranja("info", "face", "Acérquese a la cámara");
+    }
+
+    private static string Iniciales(string? nombre) =>
+        string.Concat((nombre ?? "?").Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(p => char.ToUpper(p[0])));
+
+    private async Task VerFaceLogs()
+    {
+        await dialogService.OpenAsync<FaceLogsPop>("Log de reconocimiento",
+            new Dictionary<string, object>(),
+            new DialogOptions
+            {
+                Width = "95vw",
+                Height = "70dvh",
+            });
+    }
+
+    private void AlPasarASegundoPlano(object? sender, EventArgs e) => _ = InvokeAsync(Finalizar);
+
+    private async Task CargarCamarasAsync()
+    {
+        try
+        {
+            var lista = await JsRuntime.InvokeAsync<List<CameraInfo>>("getCameras");
+            if (lista is null || lista.Count <= 1) return;
+            cameras = lista;
+            var guardada = await JsRuntime.InvokeAsync<string?>("loadPreferredCamera");
+            selectedCameraId = !string.IsNullOrEmpty(guardada) && cameras.Any(c => c.DeviceId == guardada) ? guardada : cameras[0].DeviceId;
+            showCameraSelector = true;
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (Exception)
+        {
+            // sin selector: se usa la camara por defecto
+        }
+    }
+
+    // Reinicia la camara con la nueva seleccion; el ciclo de identificacion se detiene y se reanuda
+    private async Task OnCameraChanged(object value)
+    {
+        if (cambiandoCamara || finalizado) return;
+        selectedCameraId = value?.ToString() ?? "";
+        if (string.IsNullOrEmpty(selectedCameraId)) return;
+
+        cambiandoCamara = true;
+        try
+        {
+            MostrarFranja("info", "videocam", "Cambiando de cámara…");
+            cts?.Cancel();
+            await EsperarCiclo();
+
+            await JsRuntime.InvokeVoidAsync("setPreferredCamera", selectedCameraId);
+            await JsRuntime.InvokeVoidAsync("stopMedia");
+            if (await JsRuntime.InvokeAsync<int>("startCamera") != 1)
+            {
+                MostrarFranja("error", "no_photography", "No se pudo iniciar la cámara seleccionada.");
+                return;
+            }
+
+            cts?.Dispose();
+            cts = new CancellationTokenSource();
+            ciclo = CicloAsync(cts.Token);
+        }
+        catch (Exception e)
+        {
+            MostrarFranja("error", "error", $"Error al cambiar de cámara: {e.Message}");
+        }
+        finally
+        {
+            cambiandoCamara = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task Finalizar()
+    {
+        if (finalizado) return;
+        finalizado = true;
+        cts?.Cancel();
+        await EsperarCiclo();
+        await ApagarCamara();
+        dialogService.Close(new ResumenSesionGrupal
+        {
+            TipoMarca = TipoMarca,
+            Inicio = inicio,
+            Fin = DateTime.Now,
+            Esperados = Empleados.Where(e => Esperados.Contains(e.IdNumero!)).ToList(),
+            Registrados = Registrados,
+        });
+    }
+
+    private async Task ApagarCamara()
+    {
+        try
+        {
+            await JsRuntime.InvokeVoidAsync("stopMedia");
+            await JsRuntime.InvokeVoidAsync("clearGroupDescriptors");
+        }
+        catch (JSDisconnectedException) { }
+    }
+
+    private async Task EsperarCiclo()
+    {
+        if (ciclo is null) return;
+        try
+        {
+            await ciclo;
+        }
+        catch (OperationCanceledException) { }
+        catch (JSDisconnectedException) { }
+        catch (Exception) { }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (ventana is not null) ventana.Stopped -= AlPasarASegundoPlano;
+        cts?.Cancel();
+        await EsperarCiclo();
+        cts?.Dispose();
+        if (!finalizado) await ApagarCamara();
+    }
+}

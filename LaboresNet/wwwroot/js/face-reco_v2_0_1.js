@@ -17,9 +17,29 @@ let ssdLoaded = false;
 // Reusable offscreen canvas to avoid creating a new one for each frame
 let _offscreenCanvas = null;
 let _offscreenContext = null;
+// Copia con mejora de brillo/contraste usada solo para la deteccion
+let _enhCanvas = null;
+let _enhContext = null;
 
 // tiny face detector options for better performance
 let tinyOptions = null;
+
+// --- Parametros de verificacion ---
+const DETECTOR_INPUT_SIZE = 320;
+// Ventana de tiempo maxima para obtener capturas validas (en vez de 5 fotogramas fijos)
+const VERIFY_WINDOW_MS = 4000;
+const VERIFY_MAX_FRAMES = 25;
+// Capturas con textura valida requeridas antes de comparar
+const VERIFY_MIN_TEXTURE_OK = 2;
+// Plantillas registradas que deben coincidir (se limita al total que tenga el colaborador)
+const MIN_TEMPLATE_MATCHES = 2;
+// Validacion de rostro completo (ver faceIncompleteReason)
+const FACE_MIN_SCORE = 0.4;        // score minimo del detector (el detector acepta desde 0.35)
+const FACE_MAX_OUTSIDE = 0.15;     // fraccion maxima de la caja que puede quedar fuera del encuadre
+const FACE_MIN_ASPECT = 0.6;       // ancho/alto minimo de la caja
+const FACE_MAX_ASPECT = 1.3;       // ancho/alto maximo de la caja
+const FACE_MIN_JAW_RATIO = 0.6;    // ancho de mandibula / ancho de caja
+const FACE_MIN_SYMMETRY = 0.4;     // relacion izquierda/derecha de la nariz respecto a la mandibula
 
 // --- IndexedDB simple key/value helpers with in-memory fallback ---
 // If IndexedDB is unavailable (iOS private browsing, restricted WebViews,
@@ -205,15 +225,18 @@ async function loadPreferredCamera() {
 
 async function _acquireCamera(constraints) {
     // Release any existing stream before requesting a new one to avoid AbortError/NotReadableError
+    let hadActiveCamera = false;
     if (stream) {
         try { stream.getTracks().forEach(t => t.stop()); } catch (e) {}
         stream = null;
+        hadActiveCamera = true;
     }
     if (video && video.srcObject) {
         try { video.srcObject = null; } catch (e) {}
+        hadActiveCamera = true;
     }
-    // Brief pause so the platform camera HAL has time to release hardware
-    await new Promise(r => setTimeout(r, 300));
+    // Pausa breve solo si habia una camara activa que liberar (HAL de la plataforma)
+    if (hadActiveCamera) await new Promise(r => setTimeout(r, 300));
 
     // Use specific device if one was selected; otherwise use the provided constraints as-is
     const finalConstraints = _selectedCameraDeviceId
@@ -236,6 +259,19 @@ async function _acquireCamera(constraints) {
     }
 }
 
+// Espera a que el video tenga fotogramas reales (dimensiones y datos). Con los modelos
+// precargados, startMedia/startCamera ya no esperan la carga y de lo contrario se podria
+// analizar un fotograma vacio. El pequeno margen final deja estabilizar exposicion/balance.
+async function waitForVideoReady(vid, timeoutMs) {
+    timeoutMs = timeoutMs || 3000;
+    const t0 = Date.now();
+    try { if (vid && vid.paused) await vid.play(); } catch (e) { /* autoplay ya activo */ }
+    while (vid && (vid.readyState < 2 || !vid.videoWidth) && (Date.now() - t0) < timeoutMs) {
+        await new Promise(r => setTimeout(r, 50));
+    }
+    await new Promise(r => setTimeout(r, 150));
+}
+
 async function startMedia() {
     try {
         captures = [];
@@ -253,8 +289,8 @@ async function startMedia() {
 
         const constraints = {
             video: {
-                width: { ideal: 640 },
-                height: { ideal: 480 },
+                width: { ideal: 1280 },
+                height: { ideal: 720 },
                 facingMode: 'user'
             }
         };
@@ -277,7 +313,8 @@ async function startMedia() {
         // Mostrar el video en pantalla
         video.play();
 
-        await loadModels();
+        await preloadFaceModels();
+        await waitForVideoReady(video);
         return 1;
     }
     catch (error) {
@@ -292,8 +329,8 @@ async function startCamera() {
 
         const constraints = {
             video: {
-                width: { ideal: 640 },
-                height: { ideal: 480 },
+                width: { ideal: 1280 },
+                height: { ideal: 720 },
                 facingMode: 'user'
             }
         };
@@ -315,7 +352,8 @@ async function startCamera() {
 
         // Mostrar el video en pantalla
         video.play();
-        await loadModels();
+        await preloadFaceModels();
+        await waitForVideoReady(video);
         return 1;
     }
     catch (error) {
@@ -485,8 +523,68 @@ async function safeDetectSingleFace(canvas, options) {
     }
 }
 
+let _modelsReady = false;
+let _modelsLoadingPromise = null;
+
+// Precarga los modelos y el backend de TF una sola vez por sesion de la app,
+// para que las marcas siguientes no paguen ese costo.
+function preloadFaceModels() {
+    if (_modelsReady) return Promise.resolve(true);
+    if (!_modelsLoadingPromise) {
+        _modelsLoadingPromise = loadModels()
+            .then(function () { return _modelsReady ? warmupInference().then(function () { return true; }) : false; })
+            .catch(function () { return false; })
+            .finally(function () { _modelsLoadingPromise = null; });
+    }
+    return _modelsLoadingPromise;
+}
+
+// Cargar los pesos no basta: la primera inferencia compila los shaders de WebGL (o inicializa
+// WASM) y tarda varios segundos. Se ejecuta cada red una vez sobre una imagen en blanco para
+// que esa compilacion ocurra en la precarga y no durante la primera marca.
+let _inferenceWarmed = false;
+async function warmupInference() {
+    if (_inferenceWarmed) return;
+    _inferenceWarmed = true;
+    const t0 = Date.now();
+    try {
+        const c = document.createElement('canvas');
+        c.width = 320; c.height = 240;
+        const ctx = c.getContext('2d');
+        ctx.fillStyle = '#808080';
+        ctx.fillRect(0, 0, c.width, c.height);
+        try { await faceapi.detectSingleFace(c, tinyOptions); } catch (e) { console.warn('warmup detector', e); }
+
+        const small = document.createElement('canvas');
+        small.width = 112; small.height = 112;
+        small.getContext('2d').drawImage(c, 0, 0, 112, 112);
+        try { await faceapi.nets.faceLandmark68TinyNet.detectLandmarks(small); } catch (e) { console.warn('warmup landmarks', e); }
+
+        const rec = document.createElement('canvas');
+        rec.width = 150; rec.height = 150;
+        rec.getContext('2d').drawImage(c, 0, 0, 150, 150);
+        try { await faceapi.nets.faceRecognitionNet.computeFaceDescriptor(rec); } catch (e) { console.warn('warmup descriptor', e); }
+    } catch (e) {
+        console.warn('warmupInference failed', e);
+    }
+    console.log('face-api: warmup de inferencia en ' + (Date.now() - t0) + ' ms');
+}
+
+// Dispara la precarga sin esperar (para llamarla desde Blazor sin bloquear la UI)
+function warmupFaceModels() {
+    try { preloadFaceModels(); } catch (e) { console.warn('warmupFaceModels', e); }
+    return true;
+}
+
 async function loadModels() {
     try {
+        // Si ya estan cargados solo se reaplican las opciones
+        if (_modelsReady && faceapi.nets.tinyFaceDetector.isLoaded && faceapi.nets.faceLandmark68TinyNet.isLoaded && faceapi.nets.faceRecognitionNet.isLoaded) {
+            if (!tinyOptions) tinyOptions = new faceapi.TinyFaceDetectorOptions({ inputSize: DETECTOR_INPUT_SIZE, scoreThreshold: 0.35 });
+            await initSavedLogs();
+            return;
+        }
+
         const MODEL_URL = '/faceapi-models';
 
         // initialize saved logs from IndexedDB
@@ -500,11 +598,12 @@ async function loadModels() {
         await faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL);
         await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
 
-        // inputSize 224 is faster than 320 while still accurate enough for frontal faces
-        tinyOptions = new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.35 });
+        // inputSize 320 detecta mejor rostros con angulo o a mayor distancia que 224
+        tinyOptions = new faceapi.TinyFaceDetectorOptions({ inputSize: DETECTOR_INPUT_SIZE, scoreThreshold: 0.35 });
 
         // ssdMobilenetv1 loaded lazily on demand (see loadSsdIfNeeded)
         ssdLoaded = false;
+        _modelsReady = true;
     }
     catch (error) { console.error('Error al cargar modelos para reconocimiento facial:', error); }
 }
@@ -550,18 +649,52 @@ async function registerFace() {
     const faceText = Number((await idbGet('textura')) || 0);
 
     if (face1 === '' || face2 === '' || face3 === '' || face4 === '' || face5 === '') {
-        const canvas = getEnhancedCanvasFromVideo(video);
-        const detection = await detectFaceWithFallback(canvas);
+        if (!tinyOptions || !_modelsReady) {
+            console.warn('registerFace: modelos no listos, reintentando carga', { tinyOptions: !!tinyOptions, ready: _modelsReady });
+            await preloadFaceModels();
+        }
+        if (!tinyOptions) {
+            console.error('registerFace: los modelos no se pudieron cargar (/faceapi-models)');
+            Swal.fire({ title: 'Atención', text: 'No se pudieron cargar los modelos de reconocimiento facial.', icon: 'error' });
+            return 0;
+        }
+
+        // Reintenta durante una ventana de tiempo: el primer fotograma suele salir sin rostro
+        // (exposición de la cámara, movimiento) y antes se cancelaba el registro de inmediato.
+        let detection = null;
+        let canvas = null;
+        const startedAt = Date.now();
+        let attempts = 0;
+        let rejectReason = '';
+        while (!detection && (Date.now() - startedAt) < 4000) {
+            attempts++;
+            canvas = getEnhancedCanvasFromVideo(video);
+            detection = await detectFaceWithFallback(canvas);
+            if (detection) {
+                const incomplete = faceIncompleteReason(detection);
+                if (incomplete) {
+                    rejectReason = incomplete;
+                    detection = null;
+                }
+            }
+            if (!detection) await new Promise(r => setTimeout(r, 100));
+        }
+        console.log('registerFace: intentos=' + attempts + ' rostro=' + !!detection +
+            ' video=' + video.videoWidth + 'x' + video.videoHeight + ' readyState=' + video.readyState);
 
         if (!detection) {
-            Swal.fire({ title: 'Atencion', text: 'No se logró detectar un rostro en el video, por favor acerque su rostro más a la cámara o mejore la iluminación.', icon: 'error' });
+            const msg = rejectReason
+                ? 'El rostro se ve incompleto o de lado. Coloque todo su rostro de frente dentro del encuadre, sin cubrirlo. (' + rejectReason + ')'
+                : 'No se logró detectar un rostro en el video, por favor acerque su rostro más a la cámara o mejore la iluminación.';
+            Swal.fire({ title: 'Atencion', text: msg, icon: 'error' });
             return 0;
         }
 
         // Reuse the already-drawn offscreen canvas data (no double processing)
         const imgData = _offscreenContext.getImageData(0, 0, _offscreenCanvas.width, _offscreenCanvas.height);
-        const texture = calculateTextureSampled(imgData);
+        const texture = calculateFaceTexture(imgData, detection.detection && detection.detection.box);
 
+        console.log('registerFace: textura=' + texture + ' referencia=' + faceText);
         if (texture > faceText) {
             registeredDescriptor = detection.descriptor;
             const descriptorString = Array.from(detection.descriptor).toString();
@@ -583,73 +716,121 @@ async function registerFace() {
     }
     else {
         Swal.fire({ title: 'Atención', text: 'Ya se realizó la captura de los rostros requerida por el proceso. Puede proceder a guardar los datos.', icon: 'info' });
-        return 0;
+        return 2; // ya estaba completo: no hay nada que reintentar
     }
 }
 
+// Captura rostros durante una ventana de tiempo (VERIFY_WINDOW_MS) en lugar de 5 fotogramas fijos.
+// Un fotograma sin rostro (parpadeo, movimiento) ya no cancela el intento: simplemente se reintenta.
+// Retorna 1 cuando hay al menos VERIFY_MIN_TEXTURE_OK capturas con textura válida.
 async function verifyFace() {
+    if (!tinyOptions) {
+        Swal.fire({ title: 'Atención', text: 'Los modelos de reconocimiento facial no están listos. Por favor recargue la página e intente nuevamente.', icon: 'error' });
+        return 0;
+    }
+
     captures = [];
     contador = 0;
-    const maxCaptures = 5;
     const faceText = Number((await idbGet('textura')) || 0);
     const idnum = Number((await idbGet('idnum')) || 0);
     let texturesDetected = 0;
+    let misses = 0;
     const pendingLogs = [];
+    const startedAt = Date.now();
 
-    for (let i = 0; i < maxCaptures; i++) {
+    for (let i = 0; i < VERIFY_MAX_FRAMES && (Date.now() - startedAt) < VERIFY_WINDOW_MS; i++) {
         const canvas = getEnhancedCanvasFromVideo(video);
-        const currentFace = await safeDetectSingleFace(canvas, tinyOptions);
+        let currentFace = await safeDetectSingleFace(canvas, tinyOptions);
 
-        if (!currentFace) {
-            // attempt ssd fallback if low light
-            if (_offscreenContext) {
-                const lum = meanLuminanceSampled(_offscreenContext, _offscreenCanvas.width, _offscreenCanvas.height);
-                if (lum < 60) {
-                    const loaded = await loadSsdIfNeeded();
-                    if (loaded) {
-                        try {
-                            const ssd = await safeDetectSingleFace(canvas, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.35 }));
-                            if (ssd) {
-                                const imgData = _offscreenContext.getImageData(0, 0, _offscreenCanvas.width, _offscreenCanvas.height);
-                                captures.push({ face: ssd, imgData });
-                                await new Promise(resolve => setTimeout(resolve, 50));
-                                continue;
-                            }
-                        } catch (e) { console.warn('ssd fallback error', e); }
-                    }
-                }
+        if (!currentFace && _offscreenContext) {
+            // En poca luz se intenta con ssd (solo si la luminancia del fotograma original es baja)
+            const lum = meanLuminanceSampled(_offscreenContext, _offscreenCanvas.width, _offscreenCanvas.height);
+            if (lum < 60 && (await loadSsdIfNeeded())) {
+                try {
+                    currentFace = await safeDetectSingleFace(canvas, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.35 }));
+                } catch (e) { console.warn('ssd fallback error', e); }
             }
-            return 0;
         }
 
-        // Reuse already-drawn offscreen canvas (no double getEnhancedCanvasFromVideo call)
-        const imgData = _offscreenContext.getImageData(0, 0, _offscreenCanvas.width, _offscreenCanvas.height);
-        captures.push({ face: currentFace, imgData });
+        if (!currentFace) {
+            misses++;
+            await new Promise(resolve => setTimeout(resolve, 60));
+            continue;
+        }
 
-        // Check texture immediately for early exit
-        const texture = calculateTextureSampled(imgData);
+        const incomplete = faceIncompleteReason(currentFace);
+        if (incomplete) {
+            misses++;
+            pendingLogs.push('Id: ' + idnum + ' Rostro rechazado: ' + incomplete);
+            await new Promise(resolve => setTimeout(resolve, 60));
+            continue;
+        }
+
+        // Textura sobre el rostro y en el fotograma original (sin mejora de imagen)
+        const imgData = _offscreenContext.getImageData(0, 0, _offscreenCanvas.width, _offscreenCanvas.height);
+        const texture = calculateFaceTexture(imgData, currentFace.detection && currentFace.detection.box);
         contador++;
         pendingLogs.push('Id: ' + idnum + ' Item: ' + contador + '. Textura (valor > referencia) Valor: ' + texture + ' Referencia: ' + faceText);
 
         if (texture > faceText) {
+            // Solo las capturas con textura válida participan en la comparación
+            captures.push({ face: currentFace });
             texturesDetected++;
-            if (texturesDetected >= 2) {
-                // Batch write all logs at once before returning
+            if (texturesDetected >= VERIFY_MIN_TEXTURE_OK) {
+                pendingLogs.push('Id: ' + idnum + ' Capturas válidas: ' + texturesDetected + ' Fotogramas sin rostro: ' + misses + ' Tiempo(ms): ' + (Date.now() - startedAt));
                 for (const msg of pendingLogs) savedLogs.push({ ts: new Date().toISOString(), msg });
                 await idbSet('faceLogs', savedLogs);
                 return 1;
             }
         }
 
-        // shorter delay between captures
-        await new Promise(resolve => setTimeout(resolve, 50));
+        await new Promise(resolve => setTimeout(resolve, 40));
     }
 
-    // Batch write logs
+    pendingLogs.push('Id: ' + idnum + ' Sin capturas suficientes. Válidas: ' + texturesDetected + ' Fotogramas sin rostro: ' + misses + ' Tiempo(ms): ' + (Date.now() - startedAt));
     for (const msg of pendingLogs) savedLogs.push({ ts: new Date().toISOString(), msg });
     await idbSet('faceLogs', savedLogs);
 
     return 0;
+}
+
+// Compara las capturas contra TODAS las plantillas del colaborador en una sola llamada
+// (antes eran ~3 viajes SignalR por plantilla). Una plantilla "coincide" si alguna captura
+// queda a menos de la distancia configurada. Retorna 1 si coinciden al menos
+// min(MIN_TEMPLATE_MATCHES, total de plantillas).
+async function compareFaceMulti(templates, idnumValue) {
+    if (!templates || templates.length === 0) { return 0; }
+    if (!captures || captures.length === 0) { return 0; }
+
+    const maxDistance = Number((await idbGet('distancia')) || 0);
+    const idnum = idnumValue || (await idbGet('idnum')) || 0;
+    const required = Math.min(MIN_TEMPLATE_MATCHES, templates.length);
+    const pendingLogs = [];
+    let matches = 0;
+
+    for (let t = 0; t < templates.length; t++) {
+        const data = String(templates[t] || '').split(',');
+        if (data.length < 128) continue;
+        const ref = new Float32Array(data.length);
+        for (let i = 0; i < data.length; i++) ref[i] = parseFloat(data[i]);
+
+        let best = Infinity;
+        for (const item of captures) {
+            const d = faceapi.euclideanDistance(ref, item.face.descriptor);
+            if (d < best) best = d;
+        }
+        const ok = best < maxDistance;
+        if (ok) matches++;
+        pendingLogs.push('Id: ' + idnum + ' Plantilla: ' + (t + 1) + '. Distancia (valor<referencia) Valor:' + best + ' Referencia:' + maxDistance + (ok ? ' OK' : ''));
+
+        if (matches >= required) break;
+    }
+
+    pendingLogs.push('Id: ' + idnum + ' Coincidencias: ' + matches + ' Requeridas: ' + required);
+    for (const msg of pendingLogs) savedLogs.push({ ts: new Date().toISOString(), msg });
+    await idbSet('faceLogs', savedLogs);
+
+    return matches >= required ? 1 : 0;
 }
 
 async function compareFace() {
@@ -745,18 +926,17 @@ function enhanceImage(ctx, width, height, gamma = 1.2, contrast = 20) {
         const img = ctx.getImageData(0, 0, width, height);
         const data = img.data;
         const factor = (259 * (contrast + 255)) / (255 * (259 - contrast));
+        // Tabla de 256 valores: evita Math.pow por cada canal de cada pixel
+        const lut = new Uint8ClampedArray(256);
+        for (let v = 0; v < 256; v++) {
+            let n = Math.pow(v / 255, 1 / gamma) * 255;
+            n = factor * (n - 128) + 128;
+            lut[v] = n;
+        }
         for (let i = 0; i < data.length; i += 4) {
-            for (let c = 0; c < 3; c++) {
-                // normalize
-                let v = data[i + c] / 255;
-                // gamma correction (invert gamma param)
-                v = Math.pow(v, 1 / gamma);
-                // scale back
-                v = v * 255;
-                // contrast
-                v = factor * (v - 128) + 128;
-                data[i + c] = Math.max(0, Math.min(255, v));
-            }
+            data[i] = lut[data[i]];
+            data[i + 1] = lut[data[i + 1]];
+            data[i + 2] = lut[data[i + 2]];
         }
         ctx.putImageData(img, 0, 0);
     }
@@ -771,8 +951,13 @@ function getEnhancedCanvasFromVideo(video) {
         _offscreenContext = _offscreenCanvas.getContext('2d', { willReadFrequently: true });
     }
 
-    _offscreenCanvas.width = video.videoWidth || 640;
-    _offscreenCanvas.height = video.videoHeight || 480;
+    // El video se muestra en alta resolucion, pero el analisis se mantiene en ~640px
+    // (lado mayor) para conservar velocidad y descriptores equivalentes a los ya enrolados.
+    const srcW = video.videoWidth || 640;
+    const srcH = video.videoHeight || 480;
+    const scale = Math.min(1, 640 / Math.max(srcW, srcH));
+    _offscreenCanvas.width = Math.round(srcW * scale);
+    _offscreenCanvas.height = Math.round(srcH * scale);
     if (!_offscreenContext) return _offscreenCanvas;
 
     _offscreenContext.drawImage(video, 0, 0, _offscreenCanvas.width, _offscreenCanvas.height);
@@ -780,13 +965,107 @@ function getEnhancedCanvasFromVideo(video) {
     // measure luminance using sampled version (faster)
     const lum = meanLuminanceSampled(_offscreenContext, _offscreenCanvas.width, _offscreenCanvas.height);
 
+    if (lum >= 120) return _offscreenCanvas;
+
+    // La mejora de imagen se aplica sobre una copia para que _offscreenCanvas conserve
+    // el fotograma original (la medicion de textura debe usar colores sin alterar).
+    if (!_enhCanvas) {
+        _enhCanvas = document.createElement('canvas');
+        _enhContext = _enhCanvas.getContext('2d', { willReadFrequently: true });
+    }
+    _enhCanvas.width = _offscreenCanvas.width;
+    _enhCanvas.height = _offscreenCanvas.height;
+    if (!_enhContext) return _offscreenCanvas;
+    _enhContext.drawImage(_offscreenCanvas, 0, 0);
+
     if (lum < 80) {
-        enhanceImage(_offscreenContext, _offscreenCanvas.width, _offscreenCanvas.height, 1.1, 30);
+        enhanceImage(_enhContext, _enhCanvas.width, _enhCanvas.height, 1.1, 30);
     }
-    else if (lum < 120) {
-        enhanceImage(_offscreenContext, _offscreenCanvas.width, _offscreenCanvas.height, 1.15, 18);
+    else {
+        enhanceImage(_enhContext, _enhCanvas.width, _enhCanvas.height, 1.15, 18);
     }
-    return _offscreenCanvas;
+    return _enhCanvas;
+}
+
+// Textura (saturacion de color) medida solo en la zona central del rostro detectado,
+// para que no dependa del color del fondo ni de la distancia a la camara.
+function calculateFaceTexture(imageData, box) {
+    const w = imageData.width, h = imageData.height;
+    let x0 = 0, y0 = 0, x1 = w, y1 = h;
+    if (box && box.width > 0 && box.height > 0) {
+        x0 = Math.max(0, Math.floor(box.x + box.width * 0.2));
+        y0 = Math.max(0, Math.floor(box.y + box.height * 0.2));
+        x1 = Math.min(w, Math.ceil(box.x + box.width * 0.8));
+        y1 = Math.min(h, Math.ceil(box.y + box.height * 0.8));
+        if (x1 <= x0 || y1 <= y0) { x0 = 0; y0 = 0; x1 = w; y1 = h; }
+    }
+    const data = imageData.data;
+    let total = 0, count = 0;
+    for (let y = y0; y < y1; y += 2) {
+        let i = (y * w + x0) * 4;
+        for (let x = x0; x < x1; x += 2, i += 8) {
+            const r = data[i], g = data[i + 1], b = data[i + 2];
+            total += Math.abs(r - g) + Math.abs(g - b) + Math.abs(b - r);
+            count++;
+        }
+    }
+    return count > 0 ? total / count : 0;
+}
+
+// Valida que la deteccion corresponda a un rostro COMPLETO y razonablemente frontal.
+// El detector tiny devuelve una caja aunque solo se vea media cara (score >= 0.35), y el
+// descriptor resultante puede parecerse al de la plantilla. Retorna null si es valido o
+// un texto con el motivo del rechazo.
+function faceIncompleteReason(face, relaxSymmetry) {
+    try {
+        const det = face && face.detection;
+        const lm = face && face.landmarks;
+        if (!det || !lm) return 'sin landmarks';
+
+        const dims = det.imageDims || { width: _offscreenCanvas.width, height: _offscreenCanvas.height };
+        const W = dims.width, H = dims.height;
+        const box = det.box;
+
+        if (det.score < FACE_MIN_SCORE) return 'score bajo ' + det.score.toFixed(2);
+
+        // Parte de la caja fuera del encuadre. El detector extiende la caja a frente y barbilla, asi que un
+        // rostro grande y cercano la toca o la excede un poco; solo se rechaza si falta una porcion apreciable.
+        const fueraX = (Math.max(0, -box.x) + Math.max(0, box.x + box.width - W)) / box.width;
+        const fueraY = (Math.max(0, -box.y) + Math.max(0, box.y + box.height - H)) / box.height;
+        if (fueraX > FACE_MAX_OUTSIDE || fueraY > FACE_MAX_OUTSIDE) {
+            return 'rostro cortado por el borde del encuadre (fuera ' + Math.round(Math.max(fueraX, fueraY) * 100) + '%)';
+        }
+
+        // Proporcion ancho/alto: un rostro a medias produce cajas muy angostas o muy anchas
+        const ratio = box.width / box.height;
+        if (ratio < FACE_MIN_ASPECT || ratio > FACE_MAX_ASPECT) return 'proporcion anomala ' + ratio.toFixed(2);
+
+        const pts = lm.positions;
+        if (!pts || pts.length < 68) return 'landmarks incompletos';
+
+        // Los landmarks deben caer dentro del fotograma (se toleran unos pocos puntos del contorno en el borde)
+        let puntosFuera = 0;
+        for (let i = 0; i < pts.length; i++) {
+            if (pts[i].x < 0 || pts[i].y < 0 || pts[i].x > W || pts[i].y > H) puntosFuera++;
+        }
+        if (puntosFuera > 4) return 'landmarks fuera del encuadre (' + puntosFuera + ')';
+
+        // El contorno de la mandibula (0..16) debe abarcar casi todo el ancho de la caja
+        const jawWidth = Math.abs(pts[16].x - pts[0].x);
+        if (jawWidth < box.width * FACE_MIN_JAW_RATIO) return 'mandibula incompleta';
+
+        // La nariz debe quedar entre los lados de la cara (descarta perfil / media cara)
+        const left = pts[30].x - Math.min(pts[0].x, pts[16].x);
+        const right = Math.max(pts[0].x, pts[16].x) - pts[30].x;
+        if (left <= 0 || right <= 0) return 'nariz fuera del contorno';
+        const sym = Math.min(left, right) / Math.max(left, right);
+        if (!relaxSymmetry && sym < FACE_MIN_SYMMETRY) return 'rostro de perfil/incompleto (simetria ' + sym.toFixed(2) + ')';
+
+        return null;
+    } catch (e) {
+        console.warn('faceIncompleteReason', e);
+        return null;
+    }
 }
 
 async function sendLog(message) {
